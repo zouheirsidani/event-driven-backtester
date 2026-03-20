@@ -62,6 +62,26 @@ Uses `ArrayDeque<TradingEvent>` — synchronous and deterministic. The sealed `T
 3. Return a unique `strategyId()` string
 4. The strategy is auto-discovered via Spring's `List<Strategy>` injection in `BacktestExecutor` and `StrategyController`
 
+## Git workflow
+
+After completing any meaningful unit of work, commit and push immediately so the repository on GitHub always reflects the current state. Never leave work uncommitted at the end of a session.
+
+```bash
+git add <specific files>
+git commit -m "<type>(<scope>): <short summary>"
+git push
+```
+
+**Commit types:** `feat`, `fix`, `test`, `refactor`, `chore`, `docs`
+**Scope:** layer or component, e.g. `domain`, `api`, `eventloop`, `metrics`, `strategy`
+
+Commit granularity guidelines:
+- One logical change per commit (new feature, bug fix, test addition, config change)
+- Never bundle unrelated changes in a single commit
+- Commit after each completed feature, each bug fix, and each test addition — don't batch them up
+
+Use `git push` after every commit. The remote at `https://github.com/zouheirsidani/event-driven-backtester` is the source of truth for recovery.
+
 ## Key design rules
 - Domain records are immutable; `Portfolio` is the only mutable domain class (mutated by `applyFill` and `updatePrices` inside the event loop)
 - `BacktestRun.withStatus(newStatus)` creates a new record instance — the pattern for "updating" immutable domain objects
