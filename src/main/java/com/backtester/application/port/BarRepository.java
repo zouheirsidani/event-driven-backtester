@@ -11,5 +11,9 @@ public interface BarRepository {
 
     List<Bar> findByTickerAndDateRange(String ticker, LocalDate from, LocalDate to);
 
+    List<Bar> findByTickerAndDateRange(String ticker, LocalDate from, LocalDate to, int page, int size);
+
+    long countByTickerAndDateRange(String ticker, LocalDate from, LocalDate to);
+
     boolean existsByTickerAndDate(String ticker, LocalDate date);
 }

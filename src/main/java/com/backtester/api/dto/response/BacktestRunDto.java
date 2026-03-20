@@ -14,5 +14,6 @@ public record BacktestRunDto(
         LocalDate endDate,
         BigDecimal initialCash,
         String status,
-        Instant createdAt
+        Instant createdAt,
+        String benchmarkTicker
 ) {}

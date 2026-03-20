@@ -45,7 +45,8 @@ public class BacktestService {
                                String slippageType,
                                BigDecimal slippageAmount,
                                String commissionType,
-                               BigDecimal commissionAmount) {
+                               BigDecimal commissionAmount,
+                               String benchmarkTicker) {
         SlippageModel slippageModel = buildSlippageModel(slippageType, slippageAmount);
         CommissionModel commissionModel = buildCommissionModel(commissionType, commissionAmount);
 
@@ -59,7 +60,8 @@ public class BacktestService {
                 slippageModel,
                 commissionModel,
                 BacktestStatus.PENDING,
-                Instant.now()
+                Instant.now(),
+                benchmarkTicker
         );
 
         BacktestRun saved = runRepository.save(run);
@@ -69,6 +71,14 @@ public class BacktestService {
 
     public List<BacktestRun> listRuns() {
         return runRepository.findAll();
+    }
+
+    public List<BacktestRun> listRuns(int page, int size) {
+        return runRepository.findAll(page, size);
+    }
+
+    public long countRuns() {
+        return runRepository.count();
     }
 
     public Optional<BacktestRun> getRun(UUID runId) {

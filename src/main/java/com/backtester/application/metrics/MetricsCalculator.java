@@ -1,6 +1,7 @@
 package com.backtester.application.metrics;
 
 import com.backtester.domain.backtest.PerformanceMetrics;
+import com.backtester.domain.market.Bar;
 import com.backtester.domain.order.Fill;
 import com.backtester.domain.order.OrderSide;
 import com.backtester.domain.portfolio.PortfolioSnapshot;
@@ -29,6 +30,13 @@ public class MetricsCalculator {
     public PerformanceMetrics calculate(List<PortfolioSnapshot> snapshots,
                                          List<Fill> fills,
                                          BigDecimal initialCash) {
+        return calculate(snapshots, fills, initialCash, null);
+    }
+
+    public PerformanceMetrics calculate(List<PortfolioSnapshot> snapshots,
+                                         List<Fill> fills,
+                                         BigDecimal initialCash,
+                                         List<Bar> benchmarkBars) {
         if (snapshots.isEmpty()) {
             return PerformanceMetrics.empty();
         }
@@ -73,6 +81,45 @@ public class MetricsCalculator {
         // Trade-level metrics
         TradeMetrics tradeMetrics = calculateTradeMetrics(fills);
 
+        // Alpha / Beta vs benchmark (CAPM, risk-free rate = 0)
+        BigDecimal alpha = null;
+        BigDecimal beta = null;
+        if (benchmarkBars != null && benchmarkBars.size() > 1 && dailyReturns.size() > 1) {
+            List<Double> benchmarkReturns = new ArrayList<>();
+            for (int i = 1; i < benchmarkBars.size(); i++) {
+                double prev = benchmarkBars.get(i - 1).close().doubleValue();
+                double curr = benchmarkBars.get(i).close().doubleValue();
+                if (prev > 0) {
+                    benchmarkReturns.add((curr - prev) / prev);
+                }
+            }
+
+            int n = Math.min(dailyReturns.size(), benchmarkReturns.size());
+            if (n > 1) {
+                double stratMean = dailyReturns.subList(0, n).stream().mapToDouble(d -> d).average().orElse(0);
+                double benchMean = benchmarkReturns.subList(0, n).stream().mapToDouble(d -> d).average().orElse(0);
+
+                double covariance = 0.0;
+                double benchVariance = 0.0;
+                for (int i = 0; i < n; i++) {
+                    double sd = dailyReturns.get(i) - stratMean;
+                    double bd = benchmarkReturns.get(i) - benchMean;
+                    covariance += sd * bd;
+                    benchVariance += bd * bd;
+                }
+                covariance /= n;
+                benchVariance /= n;
+
+                if (benchVariance > 0) {
+                    double betaVal = covariance / benchVariance;
+                    double benchAnnualizedReturn = Math.pow(1 + benchMean, 252) - 1;
+                    double alphaVal = annualizedReturn - betaVal * benchAnnualizedReturn;
+                    alpha = bd(alphaVal);
+                    beta = bd(betaVal);
+                }
+            }
+        }
+
         return new PerformanceMetrics(
                 totalReturn.setScale(6, RoundingMode.HALF_UP),
                 bd(annualizedReturn),
@@ -83,7 +130,9 @@ public class MetricsCalculator {
                 tradeMetrics.avgWin(),
                 tradeMetrics.avgLoss(),
                 tradeMetrics.profitFactor(),
-                tradeMetrics.totalTrades()
+                tradeMetrics.totalTrades(),
+                alpha,
+                beta
         );
     }
 
@@ -102,7 +151,6 @@ public class MetricsCalculator {
     }
 
     private TradeMetrics calculateTradeMetrics(List<Fill> fills) {
-        // Match BUY fills to SELL fills FIFO per ticker to compute round-trip PnL
         Map<String, Deque<Fill>> openPositions = new HashMap<>();
         List<BigDecimal> pnls = new ArrayList<>();
 

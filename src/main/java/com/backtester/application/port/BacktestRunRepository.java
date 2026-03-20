@@ -13,4 +13,8 @@ public interface BacktestRunRepository {
     Optional<BacktestRun> findById(UUID runId);
 
     List<BacktestRun> findAll();
+
+    List<BacktestRun> findAll(int page, int size);
+
+    long count();
 }

@@ -4,6 +4,7 @@ import com.backtester.api.dto.request.CompareBacktestsRequest;
 import com.backtester.api.dto.request.RunBacktestRequest;
 import com.backtester.api.dto.response.BacktestResultResponse;
 import com.backtester.api.dto.response.BacktestRunDto;
+import com.backtester.api.dto.response.BacktestRunsResponse;
 import com.backtester.api.dto.response.CompareBacktestsResponse;
 import com.backtester.api.exception.ResourceNotFoundException;
 import com.backtester.api.mapper.BacktestDtoMapper;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -45,14 +47,20 @@ public class BacktestController {
                 request.slippageType(),
                 request.slippageAmount(),
                 request.commissionType(),
-                request.commissionAmount()
+                request.commissionAmount(),
+                request.benchmarkTicker()
         );
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(mapper.toRunDto(run));
     }
 
     @GetMapping
-    public List<BacktestRunDto> listBacktests() {
-        return backtestService.listRuns().stream().map(mapper::toRunDto).toList();
+    public BacktestRunsResponse listBacktests(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        List<BacktestRunDto> runs = backtestService.listRuns(page, size).stream()
+                .map(mapper::toRunDto).toList();
+        long totalCount = backtestService.countRuns();
+        return new BacktestRunsResponse(runs, runs.size(), totalCount, page, size);
     }
 
     @GetMapping("/{runId}")
@@ -72,7 +80,6 @@ public class BacktestController {
 
     @PostMapping("/compare")
     public CompareBacktestsResponse compareBacktests(@Valid @RequestBody CompareBacktestsRequest request) {
-        // M1: return results for each requested run (empty list if none found)
         List<BacktestResultResponse> results = request.runIds().stream()
                 .flatMap(id -> backtestService.getResult(id).stream())
                 .map(mapper::toResultResponse)

@@ -90,7 +90,18 @@ public class BacktestExecutor {
             List<PortfolioSnapshot> snapshots = loopResult.snapshots();
             List<Fill> fills = loopResult.fills();
 
-            PerformanceMetrics metrics = metricsCalculator.calculate(snapshots, fills, run.initialCash());
+            // Load benchmark bars if specified
+            List<Bar> benchmarkBars = null;
+            if (run.benchmarkTicker() != null && !run.benchmarkTicker().isBlank()) {
+                benchmarkBars = barRepository.findByTickerAndDateRange(
+                        run.benchmarkTicker(), run.startDate(), run.endDate());
+                if (benchmarkBars.isEmpty()) {
+                    log.warn("Backtest {}: no benchmark data found for ticker {}", runId, run.benchmarkTicker());
+                    benchmarkBars = null;
+                }
+            }
+
+            PerformanceMetrics metrics = metricsCalculator.calculate(snapshots, fills, run.initialCash(), benchmarkBars);
 
             List<EquityCurvePoint> equityCurve = snapshots.stream()
                     .map(s -> new EquityCurvePoint(s.date(), s.totalEquity()))

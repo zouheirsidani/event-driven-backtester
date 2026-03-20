@@ -22,7 +22,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -64,20 +66,32 @@ public class MarketDataController {
                 .body(new IngestResponse(ticker, ingested.size(), skipped));
     }
 
+    @PostMapping("/ingest/csv")
+    public ResponseEntity<IngestResponse> ingestCsv(
+            @RequestParam String ticker,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        String upperTicker = ticker.toUpperCase();
+        List<Bar> ingested = marketDataService.ingestBarsFromCsv(upperTicker, file.getInputStream());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new IngestResponse(upperTicker, ingested.size(), 0));
+    }
+
     @GetMapping("/{ticker}/bars")
     public BarsResponse queryBars(
             @PathVariable String ticker,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size) {
         String upperTicker = ticker.toUpperCase();
-        // Validate symbol exists
         try {
             marketDataService.getSymbol(upperTicker);
         } catch (IllegalArgumentException e) {
             throw new ResourceNotFoundException(e.getMessage());
         }
-        var bars = marketDataService.queryBars(upperTicker, from, to)
-                .stream().map(barMapper::toDto).toList();
-        return new BarsResponse(upperTicker, bars, bars.size());
+        List<Bar> bars = marketDataService.queryBars(upperTicker, from, to, page, size);
+        long totalCount = marketDataService.countBars(upperTicker, from, to);
+        var barDtos = bars.stream().map(barMapper::toDto).toList();
+        return new BarsResponse(upperTicker, barDtos, barDtos.size(), totalCount, page, size);
     }
 }

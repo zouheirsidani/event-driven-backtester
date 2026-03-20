@@ -18,5 +18,6 @@ public record RunBacktestRequest(
         String slippageType,
         BigDecimal slippageAmount,
         String commissionType,
-        BigDecimal commissionAmount
+        BigDecimal commissionAmount,
+        String benchmarkTicker
 ) {}

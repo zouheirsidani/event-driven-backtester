@@ -12,14 +12,16 @@ public record PerformanceMetrics(
         BigDecimal avgWin,
         BigDecimal avgLoss,
         BigDecimal profitFactor,
-        int totalTrades
+        int totalTrades,
+        BigDecimal alpha,
+        BigDecimal beta
 ) {
 
     public static PerformanceMetrics empty() {
         return new PerformanceMetrics(
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                BigDecimal.ZERO, 0
+                BigDecimal.ZERO, 0, null, null
         );
     }
 }

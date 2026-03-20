@@ -16,11 +16,12 @@ public record BacktestRun(
         SlippageModel slippageModel,
         CommissionModel commissionModel,
         BacktestStatus status,
-        Instant createdAt
+        Instant createdAt,
+        String benchmarkTicker
 ) {
 
     public BacktestRun withStatus(BacktestStatus newStatus) {
         return new BacktestRun(runId, strategyId, tickers, startDate, endDate,
-                initialCash, slippageModel, commissionModel, newStatus, createdAt);
+                initialCash, slippageModel, commissionModel, newStatus, createdAt, benchmarkTicker);
     }
 }

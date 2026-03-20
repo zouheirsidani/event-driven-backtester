@@ -25,7 +25,8 @@ public class BacktestDtoMapper {
                 run.endDate(),
                 run.initialCash(),
                 run.status().name(),
-                run.createdAt()
+                run.createdAt(),
+                run.benchmarkTicker()
         );
     }
 
@@ -58,7 +59,9 @@ public class BacktestDtoMapper {
                 m.avgWin(),
                 m.avgLoss(),
                 m.profitFactor(),
-                m.totalTrades()
+                m.totalTrades(),
+                m.alpha(),
+                m.beta()
         );
     }
 

@@ -30,7 +30,8 @@ public class BacktestRunEntityMapper {
                     objectMapper.writeValueAsString(run.slippageModel()),
                     objectMapper.writeValueAsString(run.commissionModel()),
                     run.status().name(),
-                    run.createdAt()
+                    run.createdAt(),
+                    run.benchmarkTicker()
             );
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize backtest run", e);
@@ -51,7 +52,8 @@ public class BacktestRunEntityMapper {
                     slippageModel,
                     commissionModel,
                     BacktestStatus.valueOf(entity.getStatus()),
-                    entity.getCreatedAt()
+                    entity.getCreatedAt(),
+                    entity.getBenchmarkTicker()
             );
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to deserialize backtest run", e);

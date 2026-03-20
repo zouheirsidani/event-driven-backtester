@@ -12,5 +12,7 @@ public record PerformanceMetricsDto(
         BigDecimal avgWin,
         BigDecimal avgLoss,
         BigDecimal profitFactor,
-        int totalTrades
+        int totalTrades,
+        BigDecimal alpha,
+        BigDecimal beta
 ) {}
