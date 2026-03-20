@@ -62,6 +62,33 @@ Uses `ArrayDeque<TradingEvent>` — synchronous and deterministic. The sealed `T
 3. Return a unique `strategyId()` string
 4. The strategy is auto-discovered via Spring's `List<Strategy>` injection in `BacktestExecutor` and `StrategyController`
 
+## Project milestones
+
+### Milestone 1 — COMPLETE ✓
+- Full domain model (records, sealed events, sealed slippage/commission models)
+- `MomentumStrategy` (MOMENTUM_V1) — 20-day return lookback
+- Market data ingestion + symbol registration + bar query endpoints
+- `BacktestService` + `EventLoop` with `FixedSlippage` + `FixedCommission`
+- `Portfolio` with cash/position tracking, `applyFill`, snapshots
+- `MetricsCalculator` — total return, Sharpe, max drawdown, win rate, profit factor
+- All 10 REST endpoints (compare returns empty for M1)
+- Flyway migrations V1–V4, Docker + Docker Compose
+- Unit tests: `PortfolioTest`, `MetricsCalculatorTest`, `MomentumStrategyTest`, `EventLoopTest`
+
+### Milestone 2 — NEXT
+- **`MeanReversionStrategy`** — Bollinger Band / z-score based mean reversion; add to `strategy/meanreversion/`
+- **Wire `PercentSlippage` + `PerShareCommission`** — domain records exist; expose via `RunBacktestRequest` and `BacktestService.buildSlippageModel/buildCommissionModel`
+- **Alpha/Beta vs SPY benchmark** — extend `MetricsCalculator` and `PerformanceMetrics` with `alpha` and `beta` fields; requires a benchmark `BarSeries` passed alongside the strategy series
+- **CSV bulk ingestion** — `POST /api/v1/market-data/ingest/csv` accepting multipart CSV (columns: date, open, high, low, close, volume); parse in `MarketDataService`
+- **Pagination** — add `page`/`size` query params to `GET /{ticker}/bars` and `GET /backtests`; return `totalCount` in response bodies
+- **OpenAPI/Swagger** — add `springdoc-openapi-starter-webmvc-ui` dependency; annotate controllers; available at `/swagger-ui.html`
+
+### Milestone 3 — FUTURE
+- Real market data integration (Yahoo Finance / Alpha Vantage adapter)
+- Portfolio-level multi-ticker backtesting with correlation-aware position sizing
+- Walk-forward optimisation / parameter sweep
+- WebSocket streaming of live backtest progress events
+
 ## Git workflow
 
 After completing any meaningful unit of work, commit and push immediately so the repository on GitHub always reflects the current state. Never leave work uncommitted at the end of a session.
