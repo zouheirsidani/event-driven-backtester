@@ -51,7 +51,7 @@ The simulation core. Per trading day, in strict causal order:
 Uses `ArrayDeque<TradingEvent>` — synchronous and deterministic. The sealed `TradingEvent` hierarchy enables exhaustive `switch` expressions throughout.
 
 ### Async execution
-`BacktestExecutor` (separate `@Component`) holds the `@Async("backtestExecutor")` method. `BacktestService` delegates to it to avoid Spring AOP self-proxy issues. The executor thread pool is declared in `infrastructure/config/AsyncConfig.java`.
+`BacktestExecutor` (separate `@Component`) holds the `@Async("backtestThreadPool")` method. `BacktestService` delegates to it to avoid Spring AOP self-proxy issues. The executor thread pool bean is named `backtestThreadPool` and declared in `infrastructure/config/AsyncConfig.java`. (Named `backtestThreadPool` to avoid a bean name clash with the `BacktestExecutor` component itself.)
 
 ### JSONB storage
 `BacktestRunEntity` and `BacktestResultEntity` store structured fields as JSONB. String fields use `@ColumnTransformer(write = "?::jsonb")` for PostgreSQL casting. The `tickers` field (`List<String>`) uses Hibernate 6's `@JdbcTypeCode(SqlTypes.JSON)`. Sealed `SlippageModel`/`CommissionModel` carry `@JsonTypeInfo`/`@JsonSubTypes` annotations (Jackson, not Spring) to support polymorphic JSONB round-trips via the entity mappers.
@@ -75,13 +75,13 @@ Uses `ArrayDeque<TradingEvent>` — synchronous and deterministic. The sealed `T
 - Flyway migrations V1–V4, Docker + Docker Compose
 - Unit tests: `PortfolioTest`, `MetricsCalculatorTest`, `MomentumStrategyTest`, `EventLoopTest`
 
-### Milestone 2 — NEXT
-- **`MeanReversionStrategy`** — Bollinger Band / z-score based mean reversion; add to `strategy/meanreversion/`
-- **Wire `PercentSlippage` + `PerShareCommission`** — domain records exist; expose via `RunBacktestRequest` and `BacktestService.buildSlippageModel/buildCommissionModel`
-- **Alpha/Beta vs SPY benchmark** — extend `MetricsCalculator` and `PerformanceMetrics` with `alpha` and `beta` fields; requires a benchmark `BarSeries` passed alongside the strategy series
-- **CSV bulk ingestion** — `POST /api/v1/market-data/ingest/csv` accepting multipart CSV (columns: date, open, high, low, close, volume); parse in `MarketDataService`
-- **Pagination** — add `page`/`size` query params to `GET /{ticker}/bars` and `GET /backtests`; return `totalCount` in response bodies
-- **OpenAPI/Swagger** — add `springdoc-openapi-starter-webmvc-ui` dependency; annotate controllers; available at `/swagger-ui.html`
+### Milestone 2 — COMPLETE ✓
+- **`MeanReversionStrategy`** (`MEAN_REVERSION_V1`) — Bollinger Band / z-score, 20-day window; BUY at z < -2, EXIT at z ≥ 0; in `strategy/meanreversion/`
+- **Wire `PercentSlippage` + `PerShareCommission`** — exposed via `RunBacktestRequest` (`slippageType`/`commissionType`); resolved in `BacktestService.buildSlippageModel/buildCommissionModel`
+- **Alpha/Beta vs benchmark** — optional `benchmarkTicker` on `RunBacktestRequest`; `MetricsCalculator` computes CAPM alpha/beta when benchmark bars available; `PerformanceMetrics` + `PerformanceMetricsDto` extended; Flyway V5 adds `benchmark_ticker` column
+- **CSV bulk ingestion** — `POST /api/v1/market-data/ingest/csv` (multipart, columns: date,open,high,low,close,volume); parsed in `MarketDataService.ingestBarsFromCsv`
+- **Pagination** — `page`/`size` query params on `GET /{ticker}/bars` and `GET /backtests`; `BarsResponse` includes `totalCount`; `GET /backtests` returns `BacktestRunsResponse`
+- **OpenAPI/Swagger** — `springdoc-openapi-starter-webmvc-ui:2.3.0`; UI auto-discovered at `/swagger-ui.html`
 
 ### Milestone 3 — FUTURE
 - Real market data integration (Yahoo Finance / Alpha Vantage adapter)
@@ -113,4 +113,4 @@ Use `git push` after every commit. The remote at `https://github.com/zouheirsida
 - Domain records are immutable; `Portfolio` is the only mutable domain class (mutated by `applyFill` and `updatePrices` inside the event loop)
 - `BacktestRun.withStatus(newStatus)` creates a new record instance — the pattern for "updating" immutable domain objects
 - `PositionSizer` allocates 10% of portfolio equity per signal (fixed-fractional); `SignalDirection.SHORT` is a no-op in V1
-- `ddl-auto=validate` — schema is owned by Flyway (V1–V4 in `src/main/resources/db/migration/`); never use `create` or `update`
+- `ddl-auto=validate` — schema is owned by Flyway (V1–V5 in `src/main/resources/db/migration/`); never use `create` or `update`
