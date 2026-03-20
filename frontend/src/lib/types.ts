@@ -60,6 +60,15 @@ export interface BacktestRunDto {
   initialCash: number;
   status: BacktestStatus;
   createdAt: string;
+  benchmarkTicker?: string;
+}
+
+export interface BacktestRunsResponse {
+  runs: BacktestRunDto[];
+  count: number;
+  totalCount: number;
+  page: number;
+  size: number;
 }
 
 export interface PerformanceMetricsDto {

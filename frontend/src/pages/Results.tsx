@@ -26,8 +26,8 @@ export default function Results() {
 
   // Auto-select first completed run if none selected
   useEffect(() => {
-    if (!selectedRunId && runs?.length) {
-      const first = runs.find((r) => r.status === "COMPLETED");
+    if (!selectedRunId && runs?.runs.length) {
+      const first = runs.runs.find((r) => r.status === "COMPLETED");
       if (first) setSelectedRunId(first.runId);
     }
   }, [runs, selectedRunId]);
@@ -70,7 +70,7 @@ export default function Results() {
               <SelectValue placeholder="Select a backtest run…" />
             </SelectTrigger>
             <SelectContent>
-              {runs?.map((r) => (
+              {runs?.runs.map((r) => (
                 <SelectItem key={r.runId} value={r.runId}>
                   {r.strategyId} · {r.tickers.join(",")} · {r.startDate}
                 </SelectItem>

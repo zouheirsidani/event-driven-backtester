@@ -16,7 +16,7 @@ export default function Dashboard() {
     refetchInterval: 3000,
   });
 
-  const latestCompleted = runs?.find((r) => r.status === "COMPLETED");
+  const latestCompleted = runs?.runs.find((r) => r.status === "COMPLETED");
 
   const { data: latestResult } = useQuery({
     queryKey: ["result", latestCompleted?.runId],
@@ -50,12 +50,12 @@ export default function Dashboard() {
         <StatCard
           icon={<Activity className="h-4 w-4" />}
           label="Backtest Runs"
-          value={String(runs?.length ?? "—")}
+          value={String(runs?.totalCount ?? "—")}
         />
         <StatCard
           icon={<TrendingUp className="h-4 w-4" />}
           label="Completed"
-          value={String(runs?.filter((r) => r.status === "COMPLETED").length ?? "—")}
+          value={String(runs?.runs.filter((r) => r.status === "COMPLETED").length ?? "—")}
         />
       </div>
 
@@ -105,7 +105,7 @@ export default function Dashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          {!runs || runs.length === 0 ? (
+          {!runs || runs.runs.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
               No backtests yet.{" "}
               <Link to="/backtest" className="underline underline-offset-2">
@@ -124,7 +124,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {runs.slice(0, 8).map((run) => (
+                {runs.runs.slice(0, 8).map((run) => (
                   <tr key={run.runId} className="hover:bg-muted/30 transition-colors">
                     <td className="py-2.5 font-medium">{run.strategyId}</td>
                     <td className="py-2.5 text-muted-foreground">{run.tickers.join(", ")}</td>

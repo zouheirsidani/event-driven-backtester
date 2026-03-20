@@ -6,6 +6,7 @@ import type {
   IngestResponse,
   StrategiesResponse,
   BacktestRunDto,
+  BacktestRunsResponse,
   BacktestResultResponse,
   CreateSymbolRequest,
   IngestBarsRequest,
@@ -41,7 +42,7 @@ export const submitBacktest = (req: RunBacktestRequest) =>
   client.post<BacktestRunDto>("/backtests", req).then((r) => r.data);
 
 export const getBacktests = () =>
-  client.get<BacktestRunDto[]>("/backtests").then((r) => r.data);
+  client.get<BacktestRunsResponse>("/backtests").then((r) => r.data);
 
 export const getBacktestRun = (runId: string) =>
   client.get<BacktestRunDto>(`/backtests/${runId}`).then((r) => r.data);
