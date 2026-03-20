@@ -51,7 +51,7 @@ public class BacktestExecutor {
         this.strategies = strategies;
     }
 
-    @Async("backtestExecutor")
+    @Async("backtestThreadPool")
     public CompletableFuture<Void> execute(UUID runId) {
         BacktestRun run = runRepository.findById(runId)
                 .orElseThrow(() -> new IllegalArgumentException("Backtest run not found: " + runId));
