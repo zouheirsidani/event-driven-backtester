@@ -2,6 +2,8 @@ package com.backtester.application.marketdata;
 
 import com.backtester.application.port.BarRepository;
 import com.backtester.application.port.SymbolRepository;
+import com.backtester.application.port.YahooFinanceClient;
+import com.backtester.domain.market.AssetClass;
 import com.backtester.domain.market.Bar;
 import com.backtester.domain.market.Symbol;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Application service for managing market data: registering symbols, ingesting
@@ -28,14 +32,19 @@ public class MarketDataService {
 
     private final SymbolRepository symbolRepository;
     private final BarRepository barRepository;
+    private final YahooFinanceClient yahooFinanceClient;
 
     /**
-     * @param symbolRepository Port for persisting and querying symbols.
-     * @param barRepository    Port for persisting and querying bar data.
+     * @param symbolRepository   Port for persisting and querying symbols.
+     * @param barRepository      Port for persisting and querying bar data.
+     * @param yahooFinanceClient Port for fetching live market data from Yahoo Finance.
      */
-    public MarketDataService(SymbolRepository symbolRepository, BarRepository barRepository) {
+    public MarketDataService(SymbolRepository symbolRepository,
+                              BarRepository barRepository,
+                              YahooFinanceClient yahooFinanceClient) {
         this.symbolRepository = symbolRepository;
         this.barRepository = barRepository;
+        this.yahooFinanceClient = yahooFinanceClient;
     }
 
     /**
@@ -172,4 +181,54 @@ public class MarketDataService {
     public long countBars(String ticker, LocalDate from, LocalDate to) {
         return barRepository.countByTickerAndDateRange(ticker, from, to);
     }
+
+    /**
+     * Fetches daily OHLCV bars from Yahoo Finance and persists any that are not
+     * already in the database.
+     *
+     * <p>If the ticker is not yet registered as a symbol, it is auto-registered
+     * with a placeholder name equal to the ticker and asset class {@code STOCK}.
+     * Deduplication is performed by comparing each fetched bar's date against the
+     * set of dates already stored for this ticker in the requested range.
+     *
+     * @param ticker Uppercase ticker symbol (e.g. "AAPL").
+     * @param from   Start date (inclusive).
+     * @param to     End date (inclusive).
+     * @return A {@link FetchResult} carrying counts of fetched, saved, and skipped bars.
+     */
+    @Transactional
+    public FetchResult fetchAndSaveFromYahoo(String ticker, LocalDate from, LocalDate to) {
+        // Auto-register the symbol if it doesn't exist
+        if (!symbolRepository.existsByTicker(ticker)) {
+            symbolRepository.save(new Symbol(ticker, ticker, ticker, AssetClass.STOCK));
+        }
+
+        // Fetch from Yahoo Finance
+        List<Bar> fetched = yahooFinanceClient.fetchDailyBars(ticker, from, to);
+
+        // Collect dates that are already stored in the requested range to deduplicate
+        Set<LocalDate> existingDates = barRepository.findByTickerAndDateRange(ticker, from, to)
+                .stream()
+                .map(Bar::date)
+                .collect(Collectors.toSet());
+
+        List<Bar> newBars = fetched.stream()
+                .filter(bar -> !existingDates.contains(bar.date()))
+                .toList();
+
+        barRepository.saveAll(newBars);
+
+        int saved = newBars.size();
+        int skipped = fetched.size() - saved;
+        return new FetchResult(fetched.size(), saved, skipped);
+    }
+
+    /**
+     * Result of a Yahoo Finance fetch operation.
+     *
+     * @param fetched  Total bars returned by Yahoo Finance.
+     * @param saved    New bars persisted (duplicates excluded).
+     * @param skipped  Bars skipped because they already existed.
+     */
+    public record FetchResult(int fetched, int saved, int skipped) {}
 }

@@ -18,15 +18,12 @@ import java.util.UUID;
  * Converts a {@link SignalEvent} into a concrete {@link OrderEvent} by determining
  * how many shares to trade based on the current portfolio state.
  *
- * <p>Uses a fixed-fractional position sizing rule: each LONG signal is allocated
- * {@value #PORTFOLIO_FRACTION} (10%) of total portfolio equity, capped by available
- * cash.  EXIT signals sell the full open position for the ticker.
+ * <p>Uses an equal-weight position sizing rule: each LONG signal is allocated
+ * {@code 1 / tickerCount} of total portfolio equity, capped by available cash.
+ * EXIT signals sell the full open position for the ticker.
  */
 @Component
 public class PositionSizer {
-
-    // Fixed-fractional: allocate 10% of portfolio equity per signal
-    private static final BigDecimal PORTFOLIO_FRACTION = new BigDecimal("0.10");
 
     /**
      * Sizes an order based on the signal direction and current portfolio state.
@@ -34,18 +31,21 @@ public class PositionSizer {
      * @param signal        The strategy signal to act on.
      * @param portfolio     Current portfolio for equity and cash lookups.
      * @param currentPrices Today's closing prices keyed by ticker.
+     * @param tickerCount   Total number of tickers in this backtest run; used to
+     *                      compute the equal-weight allocation fraction (1 / tickerCount).
      * @return An order event if a trade should be placed; empty if skipped (e.g. zero
      *         price, no position to exit, or SHORT signal which is not yet supported).
      */
     public Optional<OrderEvent> size(SignalEvent signal, Portfolio portfolio,
-                                      Map<String, BigDecimal> currentPrices) {
+                                      Map<String, BigDecimal> currentPrices,
+                                      int tickerCount) {
         BigDecimal price = currentPrices.get(signal.ticker());
         if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
             return Optional.empty();
         }
 
         return switch (signal.direction()) {
-            case LONG -> sizeLong(signal, portfolio, price);
+            case LONG -> sizeLong(signal, portfolio, price, tickerCount);
             case EXIT -> sizeExit(signal, portfolio);
             case SHORT -> Optional.empty(); // Not implemented in V1
         };
@@ -53,17 +53,23 @@ public class PositionSizer {
 
     /**
      * Calculates the share quantity for a LONG (buy) order.
-     * Allocates 10% of total equity, then floors to whole shares and caps
-     * at the number of shares affordable with available cash.
+     * Allocates an equal-weight fraction ({@code 1 / tickerCount}) of total equity,
+     * then floors to whole shares and caps at the number of shares affordable
+     * with available cash.
      *
-     * @param signal    The originating signal.
-     * @param portfolio Portfolio used to look up equity and cash.
-     * @param price     Current price per share for the ticker.
+     * @param signal      The originating signal.
+     * @param portfolio   Portfolio used to look up equity and cash.
+     * @param price       Current price per share for the ticker.
+     * @param tickerCount Number of tickers in this run (drives the equal-weight fraction).
      * @return A BUY order, or empty if the calculated quantity is zero (e.g. insufficient cash).
      */
-    private Optional<OrderEvent> sizeLong(SignalEvent signal, Portfolio portfolio, BigDecimal price) {
+    private Optional<OrderEvent> sizeLong(SignalEvent signal, Portfolio portfolio, BigDecimal price,
+                                           int tickerCount) {
         BigDecimal equity = portfolio.totalEquity();
-        BigDecimal allocation = equity.multiply(PORTFOLIO_FRACTION);
+        // Equal-weight: allocate 1/tickerCount of portfolio equity per signal
+        BigDecimal portfolioFraction = BigDecimal.ONE.divide(
+                BigDecimal.valueOf(Math.max(1, tickerCount)), 10, RoundingMode.HALF_UP);
+        BigDecimal allocation = equity.multiply(portfolioFraction);
 
         int quantity = allocation.divide(price, 0, RoundingMode.FLOOR).intValue();
         if (quantity <= 0) return Optional.empty();

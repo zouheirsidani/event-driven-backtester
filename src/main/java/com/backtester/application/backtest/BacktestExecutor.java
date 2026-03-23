@@ -26,7 +26,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Asynchronous executor that drives the simulation for a single backtest run.
+ * Executor that drives the simulation for a single backtest run.
  *
  * <p>This class is kept separate from {@link BacktestService} so that the
  * {@code @Async} annotation on {@link #execute} is honoured by Spring AOP.
@@ -35,7 +35,8 @@ import java.util.concurrent.CompletableFuture;
  *
  * <p>All available {@link com.backtester.domain.strategy.Strategy} implementations
  * are injected as a list by Spring; the correct one is resolved by {@code strategyId}
- * at execution time.
+ * at execution time, unless a {@code strategyOverride} is explicitly supplied (used
+ * by the parameter sweep feature to pass a pre-configured strategy instance).
  */
 @Component
 public class BacktestExecutor {
@@ -49,6 +50,14 @@ public class BacktestExecutor {
     private final MetricsCalculator metricsCalculator;
     private final List<Strategy> strategies;
 
+    /**
+     * @param runRepository    Port for persisting and querying backtest run records.
+     * @param resultRepository Port for persisting and querying backtest results.
+     * @param barRepository    Port for fetching bar data by ticker and date range.
+     * @param eventLoop        The simulation core.
+     * @param metricsCalculator Computes performance statistics from simulation output.
+     * @param strategies       All registered strategy implementations, injected by Spring.
+     */
     public BacktestExecutor(BacktestRunRepository runRepository,
                              BacktestResultRepository resultRepository,
                              BarRepository barRepository,
@@ -90,64 +99,111 @@ public class BacktestExecutor {
         log.info("Backtest {} started (strategy={}, tickers={})", runId, run.strategyId(), run.tickers());
 
         try {
-            // Load bar series for each ticker
-            List<BarSeries> seriesList = run.tickers().stream()
-                    .map(ticker -> {
-                        List<Bar> bars = barRepository.findByTickerAndDateRange(
-                                ticker, run.startDate(), run.endDate());
-                        return new BarSeries(ticker, bars);
-                    })
-                    .filter(s -> !s.bars().isEmpty())
-                    .toList();
-
-            if (seriesList.isEmpty()) {
-                throw new IllegalStateException("No bar data found for requested tickers and date range");
-            }
-
-            // Resolve strategy
-            Strategy strategy = strategies.stream()
-                    .filter(s -> s.strategyId().equals(run.strategyId()))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("Strategy not found: " + run.strategyId()));
-
-            Portfolio portfolio = new Portfolio(run.initialCash());
-
-            EventLoop.Result loopResult = eventLoop.run(
-                    seriesList, strategy, portfolio,
-                    run.slippageModel(), run.commissionModel()
-            );
-
-            List<PortfolioSnapshot> snapshots = loopResult.snapshots();
-            List<Fill> fills = loopResult.fills();
-
-            // Load benchmark bars if specified
-            List<Bar> benchmarkBars = null;
-            if (run.benchmarkTicker() != null && !run.benchmarkTicker().isBlank()) {
-                benchmarkBars = barRepository.findByTickerAndDateRange(
-                        run.benchmarkTicker(), run.startDate(), run.endDate());
-                if (benchmarkBars.isEmpty()) {
-                    log.warn("Backtest {}: no benchmark data found for ticker {}", runId, run.benchmarkTicker());
-                    benchmarkBars = null;
-                }
-            }
-
-            PerformanceMetrics metrics = metricsCalculator.calculate(snapshots, fills, run.initialCash(), benchmarkBars);
-
-            List<EquityCurvePoint> equityCurve = snapshots.stream()
-                    .map(s -> new EquityCurvePoint(s.date(), s.totalEquity()))
-                    .toList();
-
-            BacktestResult result = new BacktestResult(runId, metrics, equityCurve, fills, Instant.now());
-            resultRepository.save(result);
-            runRepository.save(run.withStatus(BacktestStatus.COMPLETED));
-
-            log.info("Backtest {} completed. Total return: {}", runId, metrics.totalReturn());
-
+            BacktestResult result = executeRun(run, null);
+            log.info("Backtest {} completed. Total return: {}", runId, result.metrics().totalReturn());
         } catch (Exception e) {
             log.error("Backtest {} failed: {}", runId, e.getMessage(), e);
             runRepository.save(run.withStatus(BacktestStatus.FAILED));
         }
 
         return CompletableFuture.completedFuture(null);
+    }
+
+    /**
+     * Executes the simulation synchronously (no {@code @Async}) and returns the result.
+     * Used by {@link SweepService} to run each parameter combination in the calling thread,
+     * avoiding thread-pool exhaustion when many combinations are executed sequentially.
+     *
+     * @param run              The backtest run configuration to execute.
+     * @param strategyOverride If non-null, this strategy instance is used directly instead
+     *                         of looking up by {@code strategyId}.
+     * @return The completed {@link BacktestResult} with metrics, equity curve, and fills.
+     * @throws RuntimeException if the simulation fails (e.g. no bar data found).
+     */
+    public BacktestResult executeSync(BacktestRun run, Strategy strategyOverride) {
+        runRepository.save(run.withStatus(BacktestStatus.RUNNING));
+        log.info("Backtest {} started synchronously (strategy={}, tickers={})",
+                run.runId(), run.strategyId(), run.tickers());
+        try {
+            BacktestResult result = executeRun(run, strategyOverride);
+            log.info("Backtest {} completed. Total return: {}", run.runId(), result.metrics().totalReturn());
+            return result;
+        } catch (Exception e) {
+            log.error("Backtest {} failed: {}", run.runId(), e.getMessage(), e);
+            runRepository.save(run.withStatus(BacktestStatus.FAILED));
+            throw e;
+        }
+    }
+
+    /**
+     * Core simulation logic shared between {@link #execute(UUID)} and {@link #executeSync}.
+     *
+     * <p>Loads bar data, resolves or uses the provided strategy, runs the event loop,
+     * computes metrics, and persists the result.  The run is transitioned to COMPLETED
+     * on success; callers are responsible for transitioning to FAILED on exception.
+     *
+     * @param run              The backtest run to simulate.
+     * @param strategyOverride Pre-configured strategy instance, or {@code null} to resolve
+     *                         by {@code strategyId} from the registered strategy list.
+     * @return The completed {@link BacktestResult}.
+     */
+    BacktestResult executeRun(BacktestRun run, Strategy strategyOverride) {
+        // Load bar series for each ticker
+        List<BarSeries> seriesList = run.tickers().stream()
+                .map(ticker -> {
+                    List<Bar> bars = barRepository.findByTickerAndDateRange(
+                            ticker, run.startDate(), run.endDate());
+                    return new BarSeries(ticker, bars);
+                })
+                .filter(s -> !s.bars().isEmpty())
+                .toList();
+
+        if (seriesList.isEmpty()) {
+            throw new IllegalStateException("No bar data found for requested tickers and date range");
+        }
+
+        // Resolve strategy: use override if provided, otherwise look up by ID
+        Strategy strategy;
+        if (strategyOverride != null) {
+            strategy = strategyOverride;
+        } else {
+            strategy = strategies.stream()
+                    .filter(s -> s.strategyId().equals(run.strategyId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Strategy not found: " + run.strategyId()));
+        }
+
+        Portfolio portfolio = new Portfolio(run.initialCash());
+
+        EventLoop.Result loopResult = eventLoop.run(
+                seriesList, strategy, portfolio,
+                run.slippageModel(), run.commissionModel()
+        );
+
+        List<PortfolioSnapshot> snapshots = loopResult.snapshots();
+        List<Fill> fills = loopResult.fills();
+
+        // Load benchmark bars if specified
+        List<Bar> benchmarkBars = null;
+        if (run.benchmarkTicker() != null && !run.benchmarkTicker().isBlank()) {
+            benchmarkBars = barRepository.findByTickerAndDateRange(
+                    run.benchmarkTicker(), run.startDate(), run.endDate());
+            if (benchmarkBars.isEmpty()) {
+                log.warn("Backtest {}: no benchmark data found for ticker {}", run.runId(), run.benchmarkTicker());
+                benchmarkBars = null;
+            }
+        }
+
+        PerformanceMetrics metrics = metricsCalculator.calculate(snapshots, fills, run.initialCash(), benchmarkBars);
+
+        List<EquityCurvePoint> equityCurve = snapshots.stream()
+                .map(s -> new EquityCurvePoint(s.date(), s.totalEquity()))
+                .toList();
+
+        BacktestResult result = new BacktestResult(run.runId(), metrics, equityCurve, fills, Instant.now());
+        resultRepository.save(result);
+        runRepository.save(run.withStatus(BacktestStatus.COMPLETED));
+
+        return result;
     }
 }

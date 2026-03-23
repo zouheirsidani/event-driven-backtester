@@ -92,12 +92,77 @@ public class BacktestService {
                 commissionModel,
                 BacktestStatus.PENDING,
                 Instant.now(),
-                benchmarkTicker
+                benchmarkTicker,
+                null  // sweepId — set later by SweepService if this is part of a sweep
         );
 
         BacktestRun saved = runRepository.save(run);
         executor.execute(saved.runId());
         return saved;
+    }
+
+    /**
+     * Creates, persists, and returns a new {@link BacktestRun} in PENDING state
+     * without triggering async execution.
+     *
+     * <p>This method is used by {@link SweepService} to create individual sweep run
+     * records before executing them synchronously.  Unlike {@link #submit}, it does
+     * not call {@link BacktestExecutor#execute}.
+     *
+     * @param strategyId       Strategy identifier.
+     * @param tickers          Tickers to include.
+     * @param startDate        Start date (inclusive).
+     * @param endDate          End date (inclusive).
+     * @param initialCash      Starting capital.
+     * @param slippageType     Slippage type string; may be null.
+     * @param slippageAmount   Slippage amount; may be null.
+     * @param commissionType   Commission type string; may be null.
+     * @param commissionAmount Commission amount; may be null.
+     * @param benchmarkTicker  Optional benchmark ticker; may be null.
+     * @return The persisted {@link BacktestRun} with status PENDING and a fresh UUID.
+     */
+    @Transactional
+    public BacktestRun submitAndReturnRun(String strategyId,
+                                           List<String> tickers,
+                                           LocalDate startDate,
+                                           LocalDate endDate,
+                                           BigDecimal initialCash,
+                                           String slippageType,
+                                           BigDecimal slippageAmount,
+                                           String commissionType,
+                                           BigDecimal commissionAmount,
+                                           String benchmarkTicker) {
+        SlippageModel slippageModel = buildSlippageModel(slippageType, slippageAmount);
+        CommissionModel commissionModel = buildCommissionModel(commissionType, commissionAmount);
+
+        BacktestRun run = new BacktestRun(
+                UUID.randomUUID(),
+                strategyId,
+                tickers,
+                startDate,
+                endDate,
+                initialCash,
+                slippageModel,
+                commissionModel,
+                BacktestStatus.PENDING,
+                Instant.now(),
+                benchmarkTicker,
+                null  // sweepId — set later by SweepService
+        );
+
+        return runRepository.save(run);
+    }
+
+    /**
+     * Persists an updated {@link BacktestRun} record.
+     * Used by {@link SweepService} to attach the {@code sweepId} after the run is created.
+     *
+     * @param run The run record to save (must already exist in the database).
+     * @return The saved run instance.
+     */
+    @Transactional
+    public BacktestRun updateRun(BacktestRun run) {
+        return runRepository.save(run);
     }
 
     /**

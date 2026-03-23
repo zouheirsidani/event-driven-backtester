@@ -20,6 +20,8 @@ import java.util.UUID;
  * @param status          Current lifecycle status as a string (PENDING / RUNNING / COMPLETED / FAILED).
  * @param createdAt       Timestamp when the run was submitted.
  * @param benchmarkTicker Optional benchmark ticker; null if none was specified.
+ * @param sweepId         Optional UUID grouping this run with other runs in a parameter sweep;
+ *                        null for standalone runs.
  */
 public record BacktestRunDto(
         UUID runId,
@@ -30,5 +32,6 @@ public record BacktestRunDto(
         BigDecimal initialCash,
         String status,
         Instant createdAt,
-        String benchmarkTicker
+        String benchmarkTicker,
+        UUID sweepId
 ) {}

@@ -86,6 +86,9 @@ public class EventLoop {
                       SlippageModel slippageModel,
                       CommissionModel commissionModel) {
 
+        // Total number of tickers drives the equal-weight allocation fraction
+        int tickerCount = seriesList.size();
+
         // Build lookup: ticker → bars sorted by date
         Map<String, List<Bar>> barsByTicker = new HashMap<>();
         for (BarSeries series : seriesList) {
@@ -146,7 +149,7 @@ public class EventLoop {
 
             for (TradingEvent event : snapshot1) {
                 if (event instanceof SignalEvent signal) {
-                    positionSizer.size(signal, portfolio, closePrices)
+                    positionSizer.size(signal, portfolio, closePrices, tickerCount)
                             .ifPresent(eventQueue::add);
                 }
             }

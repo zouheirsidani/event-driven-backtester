@@ -5,6 +5,7 @@ import com.backtester.domain.market.Bar;
 import com.backtester.domain.market.BarSeries;
 import com.backtester.domain.portfolio.Portfolio;
 
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -44,4 +45,17 @@ public interface Strategy {
      * @return An optional signal; empty means no action for this bar.
      */
     Optional<SignalEvent> onBar(BarSeries history, Bar currentBar, Portfolio portfolio);
+
+    /**
+     * Returns a new strategy instance configured with the given parameter map.
+     * Each strategy decides which keys it recognises; unknown keys are ignored.
+     * The default implementation is a no-op that returns {@code this}, so strategies
+     * that do not support parameter overrides do not need to override this method.
+     *
+     * @param params Map of parameter name to value (e.g. {@code {"lookbackDays": 30}}).
+     * @return A (possibly new) strategy instance with the parameters applied.
+     */
+    default Strategy withParameters(Map<String, Object> params) {
+        return this;
+    }
 }

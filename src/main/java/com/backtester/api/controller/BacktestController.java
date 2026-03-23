@@ -2,13 +2,16 @@ package com.backtester.api.controller;
 
 import com.backtester.api.dto.request.CompareBacktestsRequest;
 import com.backtester.api.dto.request.RunBacktestRequest;
+import com.backtester.api.dto.request.SweepBacktestRequest;
 import com.backtester.api.dto.response.BacktestResultResponse;
 import com.backtester.api.dto.response.BacktestRunDto;
 import com.backtester.api.dto.response.BacktestRunsResponse;
 import com.backtester.api.dto.response.CompareBacktestsResponse;
+import com.backtester.api.dto.response.SweepResultResponse;
 import com.backtester.api.exception.ResourceNotFoundException;
 import com.backtester.api.mapper.BacktestDtoMapper;
 import com.backtester.application.backtest.BacktestService;
+import com.backtester.application.backtest.SweepService;
 import com.backtester.domain.backtest.BacktestRun;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -34,6 +37,7 @@ import java.util.UUID;
  *   <li>{@code GET /{runId}}      — Get a single run by ID.</li>
  *   <li>{@code GET /{runId}/results} — Get the result for a completed run.</li>
  *   <li>{@code POST /compare}     — Fetch and compare results for multiple runs.</li>
+ *   <li>{@code POST /sweep}       — Run a parameter sweep across all combinations.</li>
  * </ul>
  */
 @RestController
@@ -42,14 +46,19 @@ public class BacktestController {
 
     private final BacktestService backtestService;
     private final BacktestDtoMapper mapper;
+    private final SweepService sweepService;
 
     /**
      * @param backtestService Application service for backtest lifecycle.
      * @param mapper          Mapper that converts domain objects to response DTOs.
+     * @param sweepService    Service for running parameter sweeps.
      */
-    public BacktestController(BacktestService backtestService, BacktestDtoMapper mapper) {
+    public BacktestController(BacktestService backtestService,
+                               BacktestDtoMapper mapper,
+                               SweepService sweepService) {
         this.backtestService = backtestService;
         this.mapper = mapper;
+        this.sweepService = sweepService;
     }
 
     /**
@@ -136,5 +145,22 @@ public class BacktestController {
                 .map(mapper::toResultResponse)
                 .toList();
         return new CompareBacktestsResponse(results);
+    }
+
+    /**
+     * Runs a parameter sweep, executing the given strategy across all cartesian-product
+     * combinations of the supplied parameter values and returning a ranked summary.
+     *
+     * <p>Each combination is executed synchronously and persisted as a separate backtest
+     * run tagged with a shared {@code sweepId}. Results are sorted by Sharpe ratio
+     * descending (best first); failed combinations appear last with null metric fields.
+     *
+     * @param request Validated sweep configuration.
+     * @return 200 OK with ranked results for all parameter combinations.
+     */
+    @PostMapping("/sweep")
+    public ResponseEntity<SweepResultResponse> runSweep(@Valid @RequestBody SweepBacktestRequest request) {
+        SweepResultResponse response = sweepService.runSweep(request);
+        return ResponseEntity.ok(response);
     }
 }

@@ -37,7 +37,8 @@ public class BacktestDtoMapper {
                 run.initialCash(),
                 run.status().name(),
                 run.createdAt(),
-                run.benchmarkTicker()
+                run.benchmarkTicker(),
+                run.sweepId()
         );
     }
 

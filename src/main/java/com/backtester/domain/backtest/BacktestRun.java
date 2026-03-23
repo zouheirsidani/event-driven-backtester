@@ -22,6 +22,8 @@ import java.util.UUID;
  * @param status          Current lifecycle state of this run.
  * @param createdAt       Wall-clock time the run record was created.
  * @param benchmarkTicker Optional ticker used to compute CAPM alpha/beta (may be null).
+ * @param sweepId         Optional UUID grouping this run with other runs in a parameter sweep
+ *                        (may be null for standalone runs).
  */
 public record BacktestRun(
         UUID runId,
@@ -34,7 +36,8 @@ public record BacktestRun(
         CommissionModel commissionModel,
         BacktestStatus status,
         Instant createdAt,
-        String benchmarkTicker
+        String benchmarkTicker,
+        UUID sweepId
 ) {
 
     /**
@@ -46,6 +49,19 @@ public record BacktestRun(
      */
     public BacktestRun withStatus(BacktestStatus newStatus) {
         return new BacktestRun(runId, strategyId, tickers, startDate, endDate,
-                initialCash, slippageModel, commissionModel, newStatus, createdAt, benchmarkTicker);
+                initialCash, slippageModel, commissionModel, newStatus, createdAt, benchmarkTicker, sweepId);
+    }
+
+    /**
+     * Returns a copy of this run with the sweepId field replaced.
+     * Used by {@link com.backtester.application.backtest.SweepService} to tag each
+     * individual sweep run with the shared sweep group identifier.
+     *
+     * @param newSweepId The UUID that identifies the sweep group.
+     * @return New {@code BacktestRun} with all other fields unchanged.
+     */
+    public BacktestRun withSweepId(UUID newSweepId) {
+        return new BacktestRun(runId, strategyId, tickers, startDate, endDate,
+                initialCash, slippageModel, commissionModel, status, createdAt, benchmarkTicker, newSweepId);
     }
 }

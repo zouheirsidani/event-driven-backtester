@@ -4,7 +4,9 @@
  * - Counts of registered symbols, available strategies, and backtest runs.
  * - Key performance metrics for the most recently completed backtest.
  * - A table of the most recent backtest runs with live status polling every 3 seconds.
+ * - A toggle to show or hide runs that belong to a parameter sweep.
  */
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getBacktests, getBacktestResult, getSymbols, getStrategies } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +17,9 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
+  /** When false, runs that belong to a parameter sweep (sweepId != null) are hidden. */
+  const [showSweepRuns, setShowSweepRuns] = useState(false);
+
   const { data: symbols } = useQuery({ queryKey: ["symbols"], queryFn: getSymbols });
   const { data: strategies } = useQuery({ queryKey: ["strategies"], queryFn: getStrategies });
   const { data: runs } = useQuery({
@@ -23,7 +28,10 @@ export default function Dashboard() {
     refetchInterval: 3000,
   });
 
-  const latestCompleted = runs?.runs.find((r) => r.status === "COMPLETED");
+  /** Runs filtered according to the sweep toggle. */
+  const filteredRuns = runs?.runs.filter((r) => showSweepRuns || !r.sweepId) ?? [];
+
+  const latestCompleted = filteredRuns.find((r) => r.status === "COMPLETED");
 
   const { data: latestResult } = useQuery({
     queryKey: ["result", latestCompleted?.runId],
@@ -106,13 +114,25 @@ export default function Dashboard() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Recent Runs</CardTitle>
-            <Link to="/backtest">
-              <Button variant="outline" size="sm">New backtest →</Button>
-            </Link>
+            <div className="flex items-center gap-3">
+              {/* Toggle to show/hide sweep runs */}
+              <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showSweepRuns}
+                  onChange={(e) => setShowSweepRuns(e.target.checked)}
+                  className="h-3.5 w-3.5 cursor-pointer"
+                />
+                Show sweep runs
+              </label>
+              <Link to="/backtest">
+                <Button variant="outline" size="sm">New backtest →</Button>
+              </Link>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          {!runs || runs.runs.length === 0 ? (
+          {filteredRuns.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
               No backtests yet.{" "}
               <Link to="/backtest" className="underline underline-offset-2">
@@ -131,7 +151,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {runs.runs.slice(0, 8).map((run) => (
+                {filteredRuns.slice(0, 8).map((run) => (
                   <tr key={run.runId} className="hover:bg-muted/30 transition-colors">
                     <td className="py-2.5 font-medium">{run.strategyId}</td>
                     <td className="py-2.5 text-muted-foreground">{run.tickers.join(", ")}</td>

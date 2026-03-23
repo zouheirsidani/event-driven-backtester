@@ -1,8 +1,10 @@
 package com.backtester.api.controller;
 
 import com.backtester.api.dto.request.CreateSymbolRequest;
+import com.backtester.api.dto.request.FetchMarketDataRequest;
 import com.backtester.api.dto.request.IngestBarsRequest;
 import com.backtester.api.dto.response.BarsResponse;
+import com.backtester.api.dto.response.FetchMarketDataResponse;
 import com.backtester.api.dto.response.IngestResponse;
 import com.backtester.api.dto.response.SymbolDto;
 import com.backtester.api.dto.response.SymbolsResponse;
@@ -37,6 +39,7 @@ import java.util.List;
  *   <li>{@code GET /symbols}          — List all registered symbols.</li>
  *   <li>{@code POST /ingest}          — Ingest bars via JSON body.</li>
  *   <li>{@code POST /ingest/csv}      — Bulk ingest bars from a CSV file upload.</li>
+ *   <li>{@code POST /fetch}           — Fetch live bars from Yahoo Finance and persist them.</li>
  *   <li>{@code GET /{ticker}/bars}    — Query price bars with date range and pagination.</li>
  * </ul>
  */
@@ -120,6 +123,24 @@ public class MarketDataController {
         List<Bar> ingested = marketDataService.ingestBarsFromCsv(upperTicker, file.getInputStream());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new IngestResponse(upperTicker, ingested.size(), 0));
+    }
+
+    /**
+     * Fetches daily OHLCV bars from Yahoo Finance for the given ticker and date range,
+     * persisting only bars that are not already in the database.
+     * Auto-registers the symbol as a STOCK if it is not yet known to the system.
+     *
+     * @param request Validated fetch request containing the ticker and date range.
+     * @return 200 OK with a summary of bars fetched, saved, and skipped.
+     */
+    @PostMapping("/fetch")
+    public ResponseEntity<FetchMarketDataResponse> fetchFromYahoo(
+            @Valid @RequestBody FetchMarketDataRequest request) {
+        String upperTicker = request.ticker().toUpperCase();
+        MarketDataService.FetchResult result = marketDataService.fetchAndSaveFromYahoo(
+                upperTicker, request.startDate(), request.endDate());
+        return ResponseEntity.ok(new FetchMarketDataResponse(
+                upperTicker, result.fetched(), result.saved(), result.skipped()));
     }
 
     /**

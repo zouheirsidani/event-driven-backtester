@@ -86,6 +86,8 @@ export interface BacktestRunDto {
   createdAt: string;
   /** Optional benchmark ticker for CAPM metrics; omitted if not specified. */
   benchmarkTicker?: string;
+  /** UUID grouping this run with other runs in a parameter sweep; absent for standalone runs. */
+  sweepId?: string;
 }
 
 /** Paginated response for GET /backtests. */

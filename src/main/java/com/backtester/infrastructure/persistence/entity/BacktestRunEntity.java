@@ -67,12 +67,16 @@ public class BacktestRunEntity {
     @Column(name = "benchmark_ticker")
     private String benchmarkTicker;
 
+    @Column(name = "sweep_id")
+    private UUID sweepId;
+
     protected BacktestRunEntity() {}
 
     public BacktestRunEntity(UUID runId, String strategyId, List<String> tickers,
                               LocalDate startDate, LocalDate endDate, BigDecimal initialCash,
                               String slippageConfig, String commissionConfig,
-                              String status, Instant createdAt, String benchmarkTicker) {
+                              String status, Instant createdAt, String benchmarkTicker,
+                              UUID sweepId) {
         this.runId = runId;
         this.strategyId = strategyId;
         this.tickers = tickers;
@@ -84,6 +88,7 @@ public class BacktestRunEntity {
         this.status = status;
         this.createdAt = createdAt;
         this.benchmarkTicker = benchmarkTicker;
+        this.sweepId = sweepId;
     }
 
     public UUID getRunId() { return runId; }
@@ -97,6 +102,7 @@ public class BacktestRunEntity {
     public String getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
     public String getBenchmarkTicker() { return benchmarkTicker; }
+    public UUID getSweepId() { return sweepId; }
 
     public void setStatus(String status) { this.status = status; }
 }
