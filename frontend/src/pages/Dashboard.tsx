@@ -1,3 +1,10 @@
+/**
+ * Dashboard page — the default landing page of the application.
+ * Displays a high-level summary of the platform state:
+ * - Counts of registered symbols, available strategies, and backtest runs.
+ * - Key performance metrics for the most recently completed backtest.
+ * - A table of the most recent backtest runs with live status polling every 3 seconds.
+ */
 import { useQuery } from "@tanstack/react-query";
 import { getBacktests, getBacktestResult, getSymbols, getStrategies } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -148,6 +155,13 @@ export default function Dashboard() {
   );
 }
 
+/**
+ * A small summary card showing a labelled numeric stat with an icon.
+ *
+ * @param icon  Icon element to display alongside the label.
+ * @param label Short descriptive label (e.g. "Symbols").
+ * @param value Value to display prominently (e.g. "12").
+ */
 function StatCard({
   icon,
   label,
@@ -170,6 +184,13 @@ function StatCard({
   );
 }
 
+/**
+ * A compact metric tile used in the latest-result summary section.
+ *
+ * @param label    Metric name (e.g. "Total Return").
+ * @param value    Pre-formatted value string (e.g. "15.23%").
+ * @param positive Controls colour coding: true → green, false → red, null/undefined → default.
+ */
 function MetricTile({
   label,
   value,
@@ -179,6 +200,7 @@ function MetricTile({
   value: string;
   positive?: boolean | null;
 }) {
+  // Green for positive metrics, red for negative, neutral otherwise
   const colour =
     positive === true
       ? "text-emerald-600"

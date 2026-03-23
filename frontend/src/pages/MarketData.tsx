@@ -1,3 +1,11 @@
+/**
+ * Market Data page — allows users to register new symbols, view registered symbols,
+ * and query/chart the closing price history for any registered ticker.
+ *
+ * State managed locally:
+ * - Register symbol form (ticker, name, exchange, asset class).
+ * - Price chart form (queryTicker, date range, fetchEnabled flag).
+ */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getSymbols, createSymbol, getBars } from "@/lib/api";

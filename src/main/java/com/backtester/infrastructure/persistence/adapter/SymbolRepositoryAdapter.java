@@ -9,6 +9,11 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Infrastructure adapter implementing the {@link SymbolRepository} port.
+ * Delegates to {@code SymbolJpaRepository} and uses {@code SymbolEntityMapper}
+ * to convert between domain records and JPA entities.
+ */
 @Repository
 public class SymbolRepositoryAdapter implements SymbolRepository {
 

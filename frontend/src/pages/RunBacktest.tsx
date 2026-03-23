@@ -1,3 +1,11 @@
+/**
+ * Run Backtest page — form for configuring and submitting a new backtest run.
+ *
+ * The user selects a strategy, one or more registered tickers, a date range,
+ * starting capital, and optionally slippage/commission parameters.
+ * On submit the form posts to the backend and shows a confirmation card with
+ * options to view results or submit another backtest.
+ */
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getStrategies, getSymbols, submitBacktest } from "@/lib/api";
@@ -36,12 +44,23 @@ export default function RunBacktest() {
     },
   });
 
+  /**
+   * Toggles a ticker's inclusion in the selectedTickers list.
+   * Clicking an active ticker removes it; clicking an inactive one adds it.
+   *
+   * @param t Ticker symbol to toggle.
+   */
   function toggleTicker(t: string) {
     setSelectedTickers((prev) =>
       prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
     );
   }
 
+  /**
+   * Reads the current form state and submits the backtest request via the mutation.
+   * Numeric string inputs (initialCash, slippageAmount, commissionAmount) are coerced
+   * to numbers before being sent in the request body.
+   */
   function handleSubmit() {
     mutation.mutate({
       strategyId,

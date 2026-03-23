@@ -109,6 +109,12 @@ Commit granularity guidelines:
 
 Use `git push` after every commit. The remote at `https://github.com/zouheirsidani/event-driven-backtester` is the source of truth for recovery.
 
+## Code style
+
+- **Always add Javadoc comments to every new class and method you create.** Include a summary line, `@param` tags for non-obvious parameters, and `@return` where applicable.
+- Add inline comments for any logic that isn't immediately self-evident (e.g. slippage arithmetic, z-score calculation, event queue ordering).
+- Frontend: add JSDoc comments to all new functions and components.
+
 ## Key design rules
 - Domain records are immutable; `Portfolio` is the only mutable domain class (mutated by `applyFill` and `updatePrices` inside the event loop)
 - `BacktestRun.withStatus(newStatus)` creates a new record instance — the pattern for "updating" immutable domain objects

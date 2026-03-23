@@ -1,3 +1,15 @@
+/**
+ * Results page — detailed performance analysis for a selected backtest run.
+ *
+ * The user picks a run from the dropdown (or is directed here via the `?runId=`
+ * query parameter). Runs that are still PENDING or RUNNING are polled every 2 s
+ * until they complete. Once COMPLETED the result is fetched once and displayed as:
+ * - A run summary banner (strategy, tickers, period, capital, status).
+ * - A 10-tile metrics grid (return, Sharpe, drawdown, win rate, trades, etc.).
+ * - A Recharts equity-curve line chart with a dashed reference line at initial cash.
+ * - A scrollable trades table listing every fill with date, side, qty, price, and
+ *   commission.
+ */
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -241,6 +253,14 @@ export default function Results() {
   );
 }
 
+/**
+ * A single metric tile in the performance grid.
+ *
+ * @param label    Short metric name displayed above the value.
+ * @param value    Pre-formatted value string (percentage, currency, or plain number).
+ * @param sub      Optional small subtitle rendered below the value (e.g. "rf = 0").
+ * @param positive Controls colour coding: true → emerald, false → red, null/undefined → neutral.
+ */
 function MetricCard({
   label,
   value,
@@ -269,6 +289,13 @@ function MetricCard({
   );
 }
 
+/**
+ * A single row in the trades table.
+ * BUY fills are coloured emerald; SELL fills are coloured red for quick scanning.
+ * The "Value" column is the gross fill value (price × quantity), before commission.
+ *
+ * @param trade The fill record to display.
+ */
 function TradeRow({ trade }: { trade: TradeDto }) {
   const isBuy = trade.side === "BUY";
   return (

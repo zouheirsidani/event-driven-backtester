@@ -16,17 +16,35 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Application service for managing market data: registering symbols, ingesting
+ * price bars (via JSON body or CSV upload), and querying stored bars.
+ *
+ * <p>Symbols must be registered before bars can be ingested for them.
+ * Ingestion is idempotent — duplicate bars (same ticker + date) are silently skipped.
+ */
 @Service
 public class MarketDataService {
 
     private final SymbolRepository symbolRepository;
     private final BarRepository barRepository;
 
+    /**
+     * @param symbolRepository Port for persisting and querying symbols.
+     * @param barRepository    Port for persisting and querying bar data.
+     */
     public MarketDataService(SymbolRepository symbolRepository, BarRepository barRepository) {
         this.symbolRepository = symbolRepository;
         this.barRepository = barRepository;
     }
 
+    /**
+     * Registers a new symbol in the system.
+     *
+     * @param symbol Symbol to register.
+     * @return The persisted symbol.
+     * @throws IllegalArgumentException if a symbol with the same ticker already exists.
+     */
     @Transactional
     public Symbol registerSymbol(Symbol symbol) {
         if (symbolRepository.existsByTicker(symbol.ticker())) {
@@ -35,15 +53,36 @@ public class MarketDataService {
         return symbolRepository.save(symbol);
     }
 
+    /**
+     * Returns all registered symbols.
+     *
+     * @return All symbols in the system.
+     */
     public List<Symbol> listSymbols() {
         return symbolRepository.findAll();
     }
 
+    /**
+     * Fetches a registered symbol by ticker.
+     *
+     * @param ticker Uppercase ticker symbol.
+     * @return The symbol.
+     * @throws IllegalArgumentException if no symbol is registered for the given ticker.
+     */
     public Symbol getSymbol(String ticker) {
         return symbolRepository.findByTicker(ticker)
                 .orElseThrow(() -> new IllegalArgumentException("Symbol not found: " + ticker));
     }
 
+    /**
+     * Ingests a list of bars from a JSON request body.  Duplicate bars (same
+     * ticker + date) are filtered out before saving.
+     *
+     * @param ticker Uppercase ticker symbol (must already be registered).
+     * @param bars   Bars to ingest.
+     * @return Only the newly saved bars (duplicates excluded).
+     * @throws IllegalArgumentException if the ticker is not registered.
+     */
     @Transactional
     public List<Bar> ingestBars(String ticker, List<Bar> bars) {
         if (!symbolRepository.existsByTicker(ticker)) {
@@ -96,14 +135,40 @@ public class MarketDataService {
         return barRepository.saveAll(newBars);
     }
 
+    /**
+     * Returns all bars for a ticker in the given date range without pagination.
+     *
+     * @param ticker Uppercase ticker symbol.
+     * @param from   Start date (inclusive).
+     * @param to     End date (inclusive).
+     * @return Bars ordered by date ascending.
+     */
     public List<Bar> queryBars(String ticker, LocalDate from, LocalDate to) {
         return barRepository.findByTickerAndDateRange(ticker, from, to);
     }
 
+    /**
+     * Returns a page of bars for a ticker in the given date range.
+     *
+     * @param ticker Uppercase ticker symbol.
+     * @param from   Start date (inclusive).
+     * @param to     End date (inclusive).
+     * @param page   Zero-based page index.
+     * @param size   Maximum bars per page.
+     * @return Bars for the requested page.
+     */
     public List<Bar> queryBars(String ticker, LocalDate from, LocalDate to, int page, int size) {
         return barRepository.findByTickerAndDateRange(ticker, from, to, page, size);
     }
 
+    /**
+     * Counts bars for a ticker in the given date range (for pagination metadata).
+     *
+     * @param ticker Uppercase ticker symbol.
+     * @param from   Start date (inclusive).
+     * @param to     End date (inclusive).
+     * @return Total bar count for the query.
+     */
     public long countBars(String ticker, LocalDate from, LocalDate to) {
         return barRepository.countByTickerAndDateRange(ticker, from, to);
     }

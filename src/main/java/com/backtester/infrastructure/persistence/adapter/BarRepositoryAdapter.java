@@ -10,6 +10,11 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Infrastructure adapter implementing the {@link BarRepository} port.
+ * Bridges the application layer's domain-centric interface to the JPA repository
+ * and entity mapper, keeping JPA types invisible to the application layer.
+ */
 @Repository
 public class BarRepositoryAdapter implements BarRepository {
 

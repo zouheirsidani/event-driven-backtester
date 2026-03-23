@@ -13,9 +13,20 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Converts backtest domain objects to their corresponding API response DTOs.
+ * Keeps the API layer decoupled from domain internals (e.g. enum types vs. strings).
+ */
 @Component
 public class BacktestDtoMapper {
 
+    /**
+     * Converts a {@link BacktestRun} domain record to a {@link BacktestRunDto}.
+     * The {@code status} enum is converted to its string name for JSON serialisation.
+     *
+     * @param run Domain run record.
+     * @return API response DTO.
+     */
     public BacktestRunDto toRunDto(BacktestRun run) {
         return new BacktestRunDto(
                 run.runId(),
@@ -30,6 +41,13 @@ public class BacktestDtoMapper {
         );
     }
 
+    /**
+     * Converts a {@link BacktestResult} domain record to a {@link BacktestResultResponse}.
+     * Delegates to helper methods for metrics and trade conversion.
+     *
+     * @param result Domain result record.
+     * @return API response DTO with metrics, equity curve, and trade list.
+     */
     public BacktestResultResponse toResultResponse(BacktestResult result) {
         List<EquityCurvePointDto> curve = result.equityCurve().stream()
                 .map(p -> new EquityCurvePointDto(p.date(), p.equity()))

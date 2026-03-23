@@ -11,6 +11,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Infrastructure adapter implementing the {@link BacktestRunRepository} port.
+ * Serialises the polymorphic {@code SlippageModel} and {@code CommissionModel}
+ * to JSON strings (via Jackson in {@code BacktestRunEntityMapper}) before
+ * persisting to the {@code backtest_runs} JSONB columns.
+ */
 @Repository
 public class BacktestRunRepositoryAdapter implements BacktestRunRepository {
 

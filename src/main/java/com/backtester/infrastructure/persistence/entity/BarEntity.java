@@ -10,6 +10,12 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+/**
+ * JPA entity mapping to the {@code bars} table, which stores OHLCV price data.
+ * Uses a surrogate auto-incremented {@code id} as the primary key; the
+ * {@code (ticker, date)} combination is unique and enforced at the database level.
+ * Prices are stored with precision 18, scale 6 to handle high-price assets.
+ */
 @Entity
 @Table(name = "bars")
 public class BarEntity {

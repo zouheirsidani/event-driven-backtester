@@ -7,6 +7,11 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 
+/**
+ * JPA entity mapping to the {@code symbols} table.
+ * The ticker is the primary key (no surrogate ID needed since it is inherently unique).
+ * Domain-to-entity mapping is performed by {@code SymbolEntityMapper}.
+ */
 @Entity
 @Table(name = "symbols")
 public class SymbolEntity {

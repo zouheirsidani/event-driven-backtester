@@ -1,3 +1,9 @@
+/**
+ * Root application component.
+ * Sets up the React Query client for server state management and
+ * defines all client-side routes via React Router.
+ * All routes are nested inside the persistent Layout component (sidebar + main area).
+ */
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Layout from "@/components/Layout";

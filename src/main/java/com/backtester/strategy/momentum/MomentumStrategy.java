@@ -15,9 +15,16 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Momentum strategy using 20-day return as signal.
- * BUY when momentum is positive and no position held.
- * EXIT when momentum turns negative and position is held.
+ * Trend-following strategy that uses the 20-day price return as a momentum signal.
+ *
+ * <p>Signal logic (evaluated once per bar, per ticker):
+ * <ul>
+ *   <li><b>BUY</b>: 20-day momentum &gt; 0 and no existing position.</li>
+ *   <li><b>EXIT</b>: 20-day momentum &lt; 0 and an existing position is held.</li>
+ * </ul>
+ *
+ * <p>At least 21 bars (LOOKBACK + 1) of history are required before any signal
+ * is generated, so the strategy is silent during the warm-up period.
  */
 @Component
 public class MomentumStrategy implements Strategy {
@@ -34,6 +41,15 @@ public class MomentumStrategy implements Strategy {
         return "Momentum Strategy (20-day lookback)";
     }
 
+    /**
+     * Evaluates the 20-day momentum and emits a signal if entry or exit conditions are met.
+     *
+     * @param history    All bars accumulated for this ticker up to today.
+     * @param currentBar Today's bar (also the last element in history).
+     * @param portfolio  Used to check whether a position is already held.
+     * @return A LONG signal if momentum is positive and no position; EXIT signal if
+     *         momentum is negative and a position is held; empty otherwise.
+     */
     @Override
     public Optional<SignalEvent> onBar(BarSeries history, Bar currentBar, Portfolio portfolio) {
         List<Bar> bars = history.bars();
@@ -50,7 +66,7 @@ public class MomentumStrategy implements Strategy {
             return Optional.empty();
         }
 
-        // 20-day momentum = (current - past) / past
+        // 20-day momentum = (currentClose - priceNDaysAgo) / priceNDaysAgo
         BigDecimal momentum = currentBar.close()
                 .subtract(lookbackPrice)
                 .divide(lookbackPrice, 6, RoundingMode.HALF_UP);

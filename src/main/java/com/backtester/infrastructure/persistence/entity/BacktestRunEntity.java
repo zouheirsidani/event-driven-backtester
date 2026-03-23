@@ -14,6 +14,18 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * JPA entity mapping to the {@code backtest_runs} table.
+ *
+ * <p>Structured fields are persisted as PostgreSQL JSONB:
+ * <ul>
+ *   <li>{@code tickers} — stored using Hibernate's {@code @JdbcTypeCode(SqlTypes.JSON)},
+ *       which handles the {@code List<String>} ↔ JSONB array conversion natively.</li>
+ *   <li>{@code slippage_config} and {@code commission_config} — stored as Jackson-serialised
+ *       JSON strings using {@code @ColumnTransformer(write = "?::jsonb")} to cast the
+ *       plain string parameter to the {@code jsonb} PostgreSQL type on every write.</li>
+ * </ul>
+ */
 @Entity
 @Table(name = "backtest_runs")
 public class BacktestRunEntity {

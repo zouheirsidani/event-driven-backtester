@@ -25,6 +25,18 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Asynchronous executor that drives the simulation for a single backtest run.
+ *
+ * <p>This class is kept separate from {@link BacktestService} so that the
+ * {@code @Async} annotation on {@link #execute} is honoured by Spring AOP.
+ * If {@code execute} were on the same bean as the caller, the proxy would be
+ * bypassed (self-invocation problem) and the method would run synchronously.
+ *
+ * <p>All available {@link com.backtester.domain.strategy.Strategy} implementations
+ * are injected as a list by Spring; the correct one is resolved by {@code strategyId}
+ * at execution time.
+ */
 @Component
 public class BacktestExecutor {
 
@@ -51,6 +63,24 @@ public class BacktestExecutor {
         this.strategies = strategies;
     }
 
+    /**
+     * Runs the full backtest simulation for the given run ID on a background thread
+     * from the {@code backtestThreadPool}.
+     *
+     * <p>Steps performed:
+     * <ol>
+     *   <li>Load the run and transition it to RUNNING.</li>
+     *   <li>Fetch bar data for each requested ticker in the date range.</li>
+     *   <li>Resolve the strategy by ID from the injected strategy list.</li>
+     *   <li>Run the event loop and collect snapshots and fills.</li>
+     *   <li>Optionally load benchmark bar data for CAPM metrics.</li>
+     *   <li>Compute performance metrics and persist the result.</li>
+     *   <li>Transition the run to COMPLETED; on any error transition to FAILED.</li>
+     * </ol>
+     *
+     * @param runId UUID of the run to execute.
+     * @return A completed future (used only to satisfy the {@code @Async} contract).
+     */
     @Async("backtestThreadPool")
     public CompletableFuture<Void> execute(UUID runId) {
         BacktestRun run = runRepository.findById(runId)

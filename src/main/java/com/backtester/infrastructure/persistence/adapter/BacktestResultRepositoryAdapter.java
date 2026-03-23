@@ -9,6 +9,11 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Infrastructure adapter implementing the {@link BacktestResultRepository} port.
+ * Persists structured result data (metrics, equity curve, trades) as JSONB
+ * columns by delegating serialisation to {@code BacktestResultEntityMapper}.
+ */
 @Repository
 public class BacktestResultRepositoryAdapter implements BacktestResultRepository {
 

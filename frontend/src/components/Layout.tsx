@@ -1,3 +1,8 @@
+/**
+ * Persistent application shell component that wraps all pages.
+ * Renders a fixed sidebar with navigation links and a scrollable main content area.
+ * Active route highlighting is handled by React Router's NavLink isActive prop.
+ */
 import { NavLink, Outlet } from "react-router-dom";
 import { BarChart2, Database, FlaskConical, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
