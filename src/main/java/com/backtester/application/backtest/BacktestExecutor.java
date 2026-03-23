@@ -22,7 +22,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -73,39 +72,28 @@ public class BacktestExecutor {
     }
 
     /**
-     * Runs the full backtest simulation for the given run ID on a background thread
+     * Runs the full backtest simulation for the given run on a background thread
      * from the {@code backtestThreadPool}.
      *
-     * <p>Steps performed:
-     * <ol>
-     *   <li>Load the run and transition it to RUNNING.</li>
-     *   <li>Fetch bar data for each requested ticker in the date range.</li>
-     *   <li>Resolve the strategy by ID from the injected strategy list.</li>
-     *   <li>Run the event loop and collect snapshots and fills.</li>
-     *   <li>Optionally load benchmark bar data for CAPM metrics.</li>
-     *   <li>Compute performance metrics and persist the result.</li>
-     *   <li>Transition the run to COMPLETED; on any error transition to FAILED.</li>
-     * </ol>
+     * <p>Accepts the {@link BacktestRun} directly (rather than a UUID) to avoid a
+     * transaction race condition: the caller's {@code @Transactional} context may not
+     * have committed by the time this async thread starts, so a DB lookup by ID would
+     * fail silently and leave the run stuck in PENDING.
      *
-     * @param runId UUID of the run to execute.
+     * @param run The persisted backtest run to execute.
      * @return A completed future (used only to satisfy the {@code @Async} contract).
      */
     @Async("backtestThreadPool")
-    public CompletableFuture<Void> execute(UUID runId) {
-        BacktestRun run = runRepository.findById(runId)
-                .orElseThrow(() -> new IllegalArgumentException("Backtest run not found: " + runId));
-
-        runRepository.save(run.withStatus(BacktestStatus.RUNNING));
-        log.info("Backtest {} started (strategy={}, tickers={})", runId, run.strategyId(), run.tickers());
-
+    public CompletableFuture<Void> execute(BacktestRun run) {
         try {
+            runRepository.save(run.withStatus(BacktestStatus.RUNNING));
+            log.info("Backtest {} started (strategy={}, tickers={})", run.runId(), run.strategyId(), run.tickers());
             BacktestResult result = executeRun(run, null);
-            log.info("Backtest {} completed. Total return: {}", runId, result.metrics().totalReturn());
+            log.info("Backtest {} completed. Total return: {}", run.runId(), result.metrics().totalReturn());
         } catch (Exception e) {
-            log.error("Backtest {} failed: {}", runId, e.getMessage(), e);
+            log.error("Backtest {} failed: {}", run.runId(), e.getMessage(), e);
             runRepository.save(run.withStatus(BacktestStatus.FAILED));
         }
-
         return CompletableFuture.completedFuture(null);
     }
 

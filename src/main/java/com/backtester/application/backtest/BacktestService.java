@@ -97,7 +97,7 @@ public class BacktestService {
         );
 
         BacktestRun saved = runRepository.save(run);
-        executor.execute(saved.runId());
+        executor.execute(saved);
         return saved;
     }
 
