@@ -19,8 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import StatusBadge from "@/components/StatusBadge";
 import { formatPct, formatNumber, formatCurrency } from "@/lib/utils";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -167,42 +167,76 @@ export default function Results() {
                   <CardTitle className="text-base">Equity Curve</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {chartData && chartData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={320}>
-                      <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fontSize: 11 }}
-                          tickFormatter={(v: string) => v.slice(0, 7)}
-                          interval="preserveStartEnd"
-                        />
-                        <YAxis
-                          tick={{ fontSize: 11 }}
-                          domain={["auto", "auto"]}
-                          tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
-                          width={55}
-                        />
-                        <Tooltip
-                          formatter={(v) => [formatCurrency(v as number), "Portfolio Value"]}
-                          labelStyle={{ fontSize: 12 }}
-                        />
-                        <ReferenceLine
-                          y={initialCash}
-                          stroke="hsl(var(--muted-foreground))"
-                          strokeDasharray="4 4"
-                          label={{ value: "Initial", fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="equity"
-                          stroke="hsl(var(--primary))"
-                          dot={false}
-                          strokeWidth={2}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
+                  {chartData && chartData.length > 0 ? (() => {
+                    // Compute where the initial-cash line sits in the Y domain (0 = top, 1 = bottom in SVG).
+                    // This drives the gradient split between the profit zone (green) and loss zone (red).
+                    const equities = chartData.map((d) => d.equity);
+                    const minE = Math.min(...equities);
+                    const maxE = Math.max(...equities);
+                    const range = maxE - minE;
+                    // Fraction from the TOP of the chart where initialCash falls
+                    const splitPct = range > 0
+                      ? Math.max(0, Math.min(100, ((maxE - initialCash) / range) * 100))
+                      : 0;
+                    const splitStr = `${splitPct.toFixed(1)}%`;
+
+                    return (
+                      <ResponsiveContainer width="100%" height={320}>
+                        <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                          <defs>
+                            <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+                              {/* Profit zone — green */}
+                              <stop offset={splitStr} stopColor="#22c55e" stopOpacity={0.25} />
+                              {/* Loss zone — red */}
+                              <stop offset={splitStr} stopColor="#ef4444" stopOpacity={0.25} />
+                              <stop offset="100%" stopColor="#ef4444" stopOpacity={0.05} />
+                            </linearGradient>
+                            <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset={splitStr} stopColor="#22c55e" stopOpacity={1} />
+                              <stop offset={splitStr} stopColor="#ef4444" stopOpacity={1} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fontSize: 11 }}
+                            tickFormatter={(v: string) => v.slice(0, 7)}
+                            interval="preserveStartEnd"
+                          />
+                          <YAxis
+                            tick={{ fontSize: 11 }}
+                            domain={["auto", "auto"]}
+                            tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+                            width={55}
+                          />
+                          <Tooltip
+                            formatter={(v) => [formatCurrency(v as number), "Portfolio Value"]}
+                            labelStyle={{ fontSize: 12 }}
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--popover))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "6px",
+                              fontSize: 12,
+                            }}
+                          />
+                          <ReferenceLine
+                            y={initialCash}
+                            stroke="hsl(var(--muted-foreground))"
+                            strokeDasharray="4 4"
+                            label={{ value: "Initial", fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="equity"
+                            stroke="url(#lineGradient)"
+                            strokeWidth={2}
+                            fill="url(#equityGradient)"
+                            dot={false}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    );
+                  })() : (
                     <p className="text-muted-foreground text-sm">No equity curve data.</p>
                   )}
                 </CardContent>
