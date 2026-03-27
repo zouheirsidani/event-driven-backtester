@@ -11,9 +11,10 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Counter-trend strategy based on the Bollinger Band z-score.
@@ -81,72 +82,61 @@ public class MeanReversionStrategy implements Strategy {
     }
 
     /**
-     * Computes the rolling z-score and emits a signal if entry or exit
-     * thresholds are crossed.
+     * Computes the rolling z-score for every ticker in the universe and emits signals
+     * for each ticker where entry or exit thresholds are crossed.
      *
-     * @param history    All bars for this ticker up to today.
-     * @param currentBar Today's bar.
-     * @param portfolio  Used to check whether a position is already held.
-     * @return A LONG signal when the price is beyond the z-score threshold and no
-     *         position is held; an EXIT signal when price reverts to mean or above
-     *         and a position is held; empty otherwise.
+     * @param date      The current trading date.
+     * @param universe  Map of ticker to accumulated BarSeries up to and including today.
+     * @param portfolio Used to check whether a position is already held per ticker.
+     * @return List of LONG signals (z-score below threshold, no position) and EXIT signals
+     *         (price reverted to mean or above, position held) for all applicable tickers.
      */
     @Override
-    public Optional<SignalEvent> onBar(BarSeries history, Bar currentBar, Portfolio portfolio) {
-        List<Bar> bars = history.bars();
-        // Require a full window of bars before calculating statistics
-        if (bars.size() < windowSize) {
-            return Optional.empty();
+    public List<SignalEvent> onDay(LocalDate date, Map<String, BarSeries> universe, Portfolio portfolio) {
+        List<SignalEvent> signals = new ArrayList<>();
+        for (Map.Entry<String, BarSeries> entry : universe.entrySet()) {
+            String ticker = entry.getKey();
+            BarSeries history = entry.getValue();
+            List<Bar> bars = history.bars();
+
+            // Require a full window of bars before calculating statistics
+            if (bars.size() < windowSize) continue;
+
+            // Use only the most recent windowSize bars to compute rolling statistics
+            List<Bar> window = bars.subList(bars.size() - windowSize, bars.size());
+
+            // Step 1: Compute the rolling mean of close prices over the window
+            double mean = window.stream()
+                    .mapToDouble(b -> b.close().doubleValue())
+                    .average()
+                    .orElse(0.0);
+
+            // Step 2: Compute the population variance (average squared deviation from mean)
+            double variance = window.stream()
+                    .mapToDouble(b -> Math.pow(b.close().doubleValue() - mean, 2))
+                    .average()
+                    .orElse(0.0);
+
+            // Step 3: Standard deviation = sqrt(variance); guard against flat price series
+            double stdDev = Math.sqrt(variance);
+            if (stdDev == 0.0) continue;
+
+            // Step 4: z-score = (currentClose - rollingMean) / rollingStdDev
+            Bar currentBar = bars.get(bars.size() - 1);
+            double zScore = (currentBar.close().doubleValue() - mean) / stdDev;
+            boolean hasPosition = portfolio.getPositions().containsKey(ticker);
+
+            if (zScore < zScoreThreshold && !hasPosition) {
+                signals.add(new SignalEvent(ticker, SignalDirection.LONG,
+                        BigDecimal.valueOf(Math.abs(zScore)).setScale(6, RoundingMode.HALF_UP),
+                        strategyId(), Instant.now()));
+            } else if (zScore >= EXIT_Z && hasPosition) {
+                signals.add(new SignalEvent(ticker, SignalDirection.EXIT,
+                        BigDecimal.valueOf(Math.abs(zScore)).setScale(6, RoundingMode.HALF_UP),
+                        strategyId(), Instant.now()));
+            }
         }
-
-        // Use only the most recent windowSize bars to compute rolling statistics
-        List<Bar> window = bars.subList(bars.size() - windowSize, bars.size());
-
-        // Step 1: Compute the rolling mean of close prices over the window
-        double mean = window.stream()
-                .mapToDouble(b -> b.close().doubleValue())
-                .average()
-                .orElse(0.0);
-
-        // Step 2: Compute the population variance (average squared deviation from mean)
-        double variance = window.stream()
-                .mapToDouble(b -> Math.pow(b.close().doubleValue() - mean, 2))
-                .average()
-                .orElse(0.0);
-
-        // Step 3: Standard deviation = sqrt(variance); guard against flat price series
-        double stdDev = Math.sqrt(variance);
-        if (stdDev == 0.0) {
-            return Optional.empty();
-        }
-
-        // Step 4: z-score = (currentClose - rollingMean) / rollingStdDev
-        double zScore = (currentBar.close().doubleValue() - mean) / stdDev;
-        boolean hasPosition = portfolio.getPositions().containsKey(currentBar.ticker());
-
-        if (zScore < zScoreThreshold && !hasPosition) {
-            BigDecimal strength = BigDecimal.valueOf(Math.abs(zScore)).setScale(6, RoundingMode.HALF_UP);
-            return Optional.of(new SignalEvent(
-                    currentBar.ticker(),
-                    SignalDirection.LONG,
-                    strength,
-                    strategyId(),
-                    Instant.now()
-            ));
-        }
-
-        if (zScore >= EXIT_Z && hasPosition) {
-            BigDecimal strength = BigDecimal.valueOf(Math.abs(zScore)).setScale(6, RoundingMode.HALF_UP);
-            return Optional.of(new SignalEvent(
-                    currentBar.ticker(),
-                    SignalDirection.EXIT,
-                    strength,
-                    strategyId(),
-                    Instant.now()
-            ));
-        }
-
-        return Optional.empty();
+        return signals;
     }
 
     /**

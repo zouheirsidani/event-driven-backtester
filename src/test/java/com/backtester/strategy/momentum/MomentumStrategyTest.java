@@ -14,7 +14,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,11 +38,12 @@ class MomentumStrategyTest {
     void noSignal_withInsufficientHistory() {
         List<Bar> bars = buildBars("AAPL", 15, new BigDecimal("100"));
         BarSeries series = new BarSeries("AAPL", bars);
-        Bar currentBar = bars.get(bars.size() - 1);
+        LocalDate date = bars.get(bars.size() - 1).date();
+        Map<String, BarSeries> universe = Map.of("AAPL", series);
 
-        Optional<SignalEvent> signal = strategy.onBar(series, currentBar, portfolio);
+        List<SignalEvent> signals = strategy.onDay(date, universe, portfolio);
 
-        assertThat(signal).isEmpty();
+        assertThat(signals).isEmpty();
     }
 
     @Test
@@ -50,14 +51,15 @@ class MomentumStrategyTest {
         // Rising prices — 20-day return is positive
         List<Bar> bars = buildTrendingBars("AAPL", 25, new BigDecimal("100"), new BigDecimal("1.00"));
         BarSeries series = new BarSeries("AAPL", bars);
-        Bar currentBar = bars.get(bars.size() - 1);
+        LocalDate date = bars.get(bars.size() - 1).date();
+        Map<String, BarSeries> universe = Map.of("AAPL", series);
 
-        Optional<SignalEvent> signal = strategy.onBar(series, currentBar, portfolio);
+        List<SignalEvent> signals = strategy.onDay(date, universe, portfolio);
 
-        assertThat(signal).isPresent();
-        assertThat(signal.get().direction()).isEqualTo(SignalDirection.LONG);
-        assertThat(signal.get().ticker()).isEqualTo("AAPL");
-        assertThat(signal.get().strength()).isGreaterThan(BigDecimal.ZERO);
+        assertThat(signals).hasSize(1);
+        assertThat(signals.get(0).direction()).isEqualTo(SignalDirection.LONG);
+        assertThat(signals.get(0).ticker()).isEqualTo("AAPL");
+        assertThat(signals.get(0).strength()).isGreaterThan(BigDecimal.ZERO);
     }
 
     @Test
@@ -68,12 +70,13 @@ class MomentumStrategyTest {
 
         List<Bar> bars = buildTrendingBars("AAPL", 25, new BigDecimal("100"), new BigDecimal("1.00"));
         BarSeries series = new BarSeries("AAPL", bars);
-        Bar currentBar = bars.get(bars.size() - 1);
+        LocalDate date = bars.get(bars.size() - 1).date();
+        Map<String, BarSeries> universe = Map.of("AAPL", series);
 
-        Optional<SignalEvent> signal = strategy.onBar(series, currentBar, portfolio);
+        List<SignalEvent> signals = strategy.onDay(date, universe, portfolio);
 
         // No LONG signal because we already hold the position
-        assertThat(signal).isEmpty();
+        assertThat(signals).isEmpty();
     }
 
     @Test
@@ -85,13 +88,14 @@ class MomentumStrategyTest {
         // Declining prices
         List<Bar> bars = buildTrendingBars("AAPL", 25, new BigDecimal("150"), new BigDecimal("-1.50"));
         BarSeries series = new BarSeries("AAPL", bars);
-        Bar currentBar = bars.get(bars.size() - 1);
+        LocalDate date = bars.get(bars.size() - 1).date();
+        Map<String, BarSeries> universe = Map.of("AAPL", series);
 
-        Optional<SignalEvent> signal = strategy.onBar(series, currentBar, portfolio);
+        List<SignalEvent> signals = strategy.onDay(date, universe, portfolio);
 
-        assertThat(signal).isPresent();
-        assertThat(signal.get().direction()).isEqualTo(SignalDirection.EXIT);
-        assertThat(signal.get().ticker()).isEqualTo("AAPL");
+        assertThat(signals).hasSize(1);
+        assertThat(signals.get(0).direction()).isEqualTo(SignalDirection.EXIT);
+        assertThat(signals.get(0).ticker()).isEqualTo("AAPL");
     }
 
     @Test
@@ -99,11 +103,12 @@ class MomentumStrategyTest {
         // 20 bars means size == LOOKBACK, need LOOKBACK + 1
         List<Bar> bars = buildBars("AAPL", 20, new BigDecimal("100"));
         BarSeries series = new BarSeries("AAPL", bars);
-        Bar currentBar = bars.get(bars.size() - 1);
+        LocalDate date = bars.get(bars.size() - 1).date();
+        Map<String, BarSeries> universe = Map.of("AAPL", series);
 
-        Optional<SignalEvent> signal = strategy.onBar(series, currentBar, portfolio);
+        List<SignalEvent> signals = strategy.onDay(date, universe, portfolio);
 
-        assertThat(signal).isEmpty();
+        assertThat(signals).isEmpty();
     }
 
     // Helper: flat-price bars

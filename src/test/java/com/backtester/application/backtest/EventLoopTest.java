@@ -17,7 +17,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -152,16 +152,18 @@ class EventLoopTest {
         return bars;
     }
 
-    /** Always returns empty signal */
+    /** Always returns empty signal list — no-op strategy for structural tests. */
     static class NoOpStrategy implements Strategy {
         @Override public String strategyId() { return "NOOP"; }
         @Override public String displayName() { return "No-Op"; }
-        @Override public Optional<SignalEvent> onBar(BarSeries history, Bar currentBar, Portfolio portfolio) {
-            return Optional.empty();
+
+        @Override
+        public List<SignalEvent> onDay(LocalDate date, Map<String, BarSeries> universe, Portfolio portfolio) {
+            return List.of();
         }
     }
 
-    /** Fires a LONG signal only on the specified trigger date */
+    /** Fires a LONG signal only on the specified trigger date for a specific ticker. */
     static class SingleBuyStrategy implements Strategy {
         private final String ticker;
         private final LocalDate triggerDate;
@@ -175,12 +177,12 @@ class EventLoopTest {
         @Override public String displayName() { return "Single Buy"; }
 
         @Override
-        public Optional<SignalEvent> onBar(BarSeries history, Bar currentBar, Portfolio portfolio) {
-            if (currentBar.date().equals(triggerDate) && !portfolio.getPositions().containsKey(ticker)) {
-                return Optional.of(new SignalEvent(ticker, SignalDirection.LONG,
+        public List<SignalEvent> onDay(LocalDate date, Map<String, BarSeries> universe, Portfolio portfolio) {
+            if (date.equals(triggerDate) && !portfolio.getPositions().containsKey(ticker)) {
+                return List.of(new SignalEvent(ticker, SignalDirection.LONG,
                         BigDecimal.ONE, strategyId(), Instant.now()));
             }
-            return Optional.empty();
+            return List.of();
         }
     }
 }

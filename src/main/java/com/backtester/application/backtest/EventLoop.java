@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeSet;
 import java.util.UUID;
 
@@ -40,7 +39,7 @@ import java.util.UUID;
  * strict causal event sequence per day using a synchronous {@link ArrayDeque}:
  * <ol>
  *   <li>Emit {@link MarketDataEvent} for each ticker that has a bar on that date.</li>
- *   <li>Call {@code strategy.onBar()} immediately; queue any returned {@link SignalEvent}.</li>
+ *   <li>Call {@code strategy.onDay()} once with the full universe; queue any returned {@link SignalEvent}s.</li>
  *   <li>Convert {@link SignalEvent}s to {@link OrderEvent}s via {@link PositionSizer}.</li>
  *   <li>Execute {@link OrderEvent}s at close price + slippage → produce {@link FillEvent}s.</li>
  *   <li>Apply all {@link FillEvent}s to the {@link Portfolio}.</li>
@@ -74,7 +73,7 @@ public class EventLoop {
      * Runs the full event-driven simulation and returns results.
      *
      * @param seriesList      Bar series for each ticker to simulate.
-     * @param strategy        Strategy implementation to call each bar.
+     * @param strategy        Strategy implementation to call once per day with the full universe.
      * @param portfolio       Pre-initialised portfolio with starting capital.
      * @param slippageModel   Model for adjusting fill prices away from close.
      * @param commissionModel Model for calculating brokerage costs per fill.
@@ -125,8 +124,9 @@ public class EventLoop {
         for (LocalDate date : allDates) {
             eventQueue.clear();
             Map<String, BigDecimal> closePrices = new HashMap<>();
+            Map<String, BarSeries> universe = new HashMap<>();
 
-            // Step 1: Emit MarketDataEvents and gather signals
+            // Step 1: Emit MarketDataEvents and build universe for tickers present today
             for (String ticker : barsByTicker.keySet()) {
                 Bar bar = barIndex.get(ticker).get(date);
                 if (bar == null) continue;
@@ -136,14 +136,16 @@ public class EventLoop {
 
                 List<Bar> immutableHistory = List.copyOf(historyMap.get(ticker));
                 BarSeries history = new BarSeries(ticker, immutableHistory);
+                universe.put(ticker, history);
 
                 eventQueue.add(new MarketDataEvent(bar, Instant.now()));
-
-                Optional<SignalEvent> signal = strategy.onBar(history, bar, portfolio);
-                signal.ifPresent(eventQueue::add);
             }
 
-            // Step 2: Process SignalEvents → OrderEvents
+            // Step 2: Call strategy once with the full universe; add all returned signals
+            List<SignalEvent> signals = strategy.onDay(date, universe, portfolio);
+            signals.forEach(eventQueue::add);
+
+            // Step 3: Process SignalEvents → OrderEvents
             List<TradingEvent> snapshot1 = new ArrayList<>(eventQueue);
             eventQueue.clear();
 
@@ -154,7 +156,7 @@ public class EventLoop {
                 }
             }
 
-            // Step 3: Execute OrderEvents → FillEvents
+            // Step 4: Execute OrderEvents → FillEvents
             List<OrderEvent> orders = new ArrayList<>();
             while (!eventQueue.isEmpty()) {
                 if (eventQueue.peek() instanceof OrderEvent order) {
@@ -182,7 +184,7 @@ public class EventLoop {
                 ));
             }
 
-            // Step 4: Apply FillEvents to Portfolio
+            // Step 5: Apply FillEvents to Portfolio
             while (!eventQueue.isEmpty()) {
                 TradingEvent event = eventQueue.poll();
                 if (event instanceof FillEvent fillEvent) {
@@ -200,10 +202,10 @@ public class EventLoop {
                 }
             }
 
-            // Step 5: Update all position prices to close prices
+            // Step 6: Update all position prices to close prices
             portfolio.updatePrices(closePrices);
 
-            // Step 6: Take portfolio snapshot
+            // Step 7: Take portfolio snapshot
             snapshots.add(portfolio.takeSnapshot(date));
         }
 

@@ -11,9 +11,10 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Trend-following strategy that uses the N-day price return as a momentum signal.
@@ -65,58 +66,46 @@ public class MomentumStrategy implements Strategy {
     }
 
     /**
-     * Evaluates the N-day momentum and emits a signal if entry or exit conditions are met.
+     * Evaluates the N-day momentum for every ticker in the universe and emits signals
+     * for each ticker where entry or exit conditions are met.
      *
-     * @param history    All bars accumulated for this ticker up to today.
-     * @param currentBar Today's bar (also the last element in history).
-     * @param portfolio  Used to check whether a position is already held.
-     * @return A LONG signal if momentum is positive and no position; EXIT signal if
-     *         momentum is negative and a position is held; empty otherwise.
+     * @param date      The current trading date.
+     * @param universe  Map of ticker to accumulated BarSeries up to and including today.
+     * @param portfolio Used to check whether a position is already held per ticker.
+     * @return List of LONG signals (momentum positive, no position) and EXIT signals
+     *         (momentum negative, position held) for all applicable tickers.
      */
     @Override
-    public Optional<SignalEvent> onBar(BarSeries history, Bar currentBar, Portfolio portfolio) {
-        List<Bar> bars = history.bars();
+    public List<SignalEvent> onDay(LocalDate date, Map<String, BarSeries> universe, Portfolio portfolio) {
+        List<SignalEvent> signals = new ArrayList<>();
+        for (Map.Entry<String, BarSeries> entry : universe.entrySet()) {
+            String ticker = entry.getKey();
+            BarSeries history = entry.getValue();
+            List<Bar> bars = history.bars();
 
-        // Need at least lookbackDays + 1 bars to compute the return
-        if (bars.size() < lookbackDays + 1) {
-            return Optional.empty();
+            // Need at least lookbackDays + 1 bars to compute the return
+            if (bars.size() < lookbackDays + 1) continue;
+
+            Bar currentBar = bars.get(bars.size() - 1);
+            Bar lookbackBar = bars.get(bars.size() - lookbackDays - 1);
+            BigDecimal lookbackPrice = lookbackBar.close();
+
+            if (lookbackPrice.compareTo(BigDecimal.ZERO) == 0) continue;
+
+            // N-day momentum = (currentClose - priceNDaysAgo) / priceNDaysAgo
+            BigDecimal momentum = currentBar.close()
+                    .subtract(lookbackPrice)
+                    .divide(lookbackPrice, 6, RoundingMode.HALF_UP);
+
+            boolean hasPosition = portfolio.getPositions().containsKey(ticker);
+
+            if (momentum.compareTo(BigDecimal.ZERO) > 0 && !hasPosition) {
+                signals.add(new SignalEvent(ticker, SignalDirection.LONG, momentum.abs(), strategyId(), Instant.now()));
+            } else if (momentum.compareTo(BigDecimal.ZERO) < 0 && hasPosition) {
+                signals.add(new SignalEvent(ticker, SignalDirection.EXIT, momentum.abs(), strategyId(), Instant.now()));
+            }
         }
-
-        Bar lookbackBar = bars.get(bars.size() - lookbackDays - 1);
-        BigDecimal lookbackPrice = lookbackBar.close();
-
-        if (lookbackPrice.compareTo(BigDecimal.ZERO) == 0) {
-            return Optional.empty();
-        }
-
-        // N-day momentum = (currentClose - priceNDaysAgo) / priceNDaysAgo
-        BigDecimal momentum = currentBar.close()
-                .subtract(lookbackPrice)
-                .divide(lookbackPrice, 6, RoundingMode.HALF_UP);
-
-        boolean hasPosition = portfolio.getPositions().containsKey(currentBar.ticker());
-
-        if (momentum.compareTo(BigDecimal.ZERO) > 0 && !hasPosition) {
-            return Optional.of(new SignalEvent(
-                    currentBar.ticker(),
-                    SignalDirection.LONG,
-                    momentum.abs(),
-                    strategyId(),
-                    Instant.now()
-            ));
-        }
-
-        if (momentum.compareTo(BigDecimal.ZERO) < 0 && hasPosition) {
-            return Optional.of(new SignalEvent(
-                    currentBar.ticker(),
-                    SignalDirection.EXIT,
-                    momentum.abs(),
-                    strategyId(),
-                    Instant.now()
-            ));
-        }
-
-        return Optional.empty();
+        return signals;
     }
 
     /**

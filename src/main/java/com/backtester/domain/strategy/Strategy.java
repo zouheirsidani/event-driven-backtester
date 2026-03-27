@@ -1,12 +1,12 @@
 package com.backtester.domain.strategy;
 
 import com.backtester.domain.event.SignalEvent;
-import com.backtester.domain.market.Bar;
 import com.backtester.domain.market.BarSeries;
 import com.backtester.domain.portfolio.Portfolio;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Contract that every trading strategy must implement.
@@ -16,6 +16,9 @@ import java.util.Optional;
  *
  * <p>The domain layer intentionally has no Spring or JPA dependencies, so
  * implementations are free to use any pure-Java logic.
+ *
+ * <p>Strategies receive the full universe of tickers for each day, enabling
+ * cross-ticker logic such as regime filters, pairs trading, and sector rotation.
  */
 public interface Strategy {
 
@@ -35,16 +38,16 @@ public interface Strategy {
     String displayName();
 
     /**
-     * Called once per ticker per trading day by the event loop.
-     * The strategy may inspect the price history and current portfolio state
-     * to decide whether to emit a signal.
+     * Called once per trading day by the event loop with data for all tickers.
+     * The strategy may inspect any ticker in the universe and emit signals for any subset.
      *
-     * @param history    All bars accumulated for this ticker up to and including today.
-     * @param currentBar The bar for today (also the last element of {@code history.bars()}).
-     * @param portfolio  Read-only view of current cash and positions.
-     * @return An optional signal; empty means no action for this bar.
+     * @param date     The current trading date.
+     * @param universe Map of ticker to accumulated BarSeries up to and including today.
+     *                 Only tickers that have a bar on this date are present in the map.
+     * @param portfolio Read-only view of current cash and positions.
+     * @return List of signals (zero or more); each signal carries its own ticker field.
      */
-    Optional<SignalEvent> onBar(BarSeries history, Bar currentBar, Portfolio portfolio);
+    List<SignalEvent> onDay(LocalDate date, Map<String, BarSeries> universe, Portfolio portfolio);
 
     /**
      * Returns a new strategy instance configured with the given parameter map.
