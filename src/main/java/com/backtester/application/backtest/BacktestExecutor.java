@@ -1,5 +1,6 @@
 package com.backtester.application.backtest;
 
+import com.backtester.application.marketdata.MarketDataService;
 import com.backtester.application.metrics.MetricsCalculator;
 import com.backtester.application.port.BacktestResultRepository;
 import com.backtester.application.port.BacktestRunRepository;
@@ -48,27 +49,31 @@ public class BacktestExecutor {
     private final EventLoop eventLoop;
     private final MetricsCalculator metricsCalculator;
     private final List<Strategy> strategies;
+    private final MarketDataService marketDataService;
 
     /**
-     * @param runRepository    Port for persisting and querying backtest run records.
-     * @param resultRepository Port for persisting and querying backtest results.
-     * @param barRepository    Port for fetching bar data by ticker and date range.
-     * @param eventLoop        The simulation core.
+     * @param runRepository     Port for persisting and querying backtest run records.
+     * @param resultRepository  Port for persisting and querying backtest results.
+     * @param barRepository     Port for fetching bar data by ticker and date range.
+     * @param eventLoop         The simulation core.
      * @param metricsCalculator Computes performance statistics from simulation output.
-     * @param strategies       All registered strategy implementations, injected by Spring.
+     * @param strategies        All registered strategy implementations, injected by Spring.
+     * @param marketDataService Used to auto-fetch missing bar data from Yahoo Finance before simulation.
      */
     public BacktestExecutor(BacktestRunRepository runRepository,
                              BacktestResultRepository resultRepository,
                              BarRepository barRepository,
                              EventLoop eventLoop,
                              MetricsCalculator metricsCalculator,
-                             List<Strategy> strategies) {
+                             List<Strategy> strategies,
+                             MarketDataService marketDataService) {
         this.runRepository = runRepository;
         this.resultRepository = resultRepository;
         this.barRepository = barRepository;
         this.eventLoop = eventLoop;
         this.metricsCalculator = metricsCalculator;
         this.strategies = strategies;
+        this.marketDataService = marketDataService;
     }
 
     /**
@@ -139,6 +144,20 @@ public class BacktestExecutor {
      * @return The completed {@link BacktestResult}.
      */
     BacktestResult executeRun(BacktestRun run, Strategy strategyOverride) {
+        // Auto-fetch missing bar data from Yahoo Finance for any ticker with no local data
+        for (String ticker : run.tickers()) {
+            List<Bar> existing = barRepository.findByTickerAndDateRange(
+                    ticker, run.startDate(), run.endDate());
+            if (existing.isEmpty()) {
+                log.info("Backtest {}: no local data for {} — fetching from Yahoo Finance", run.runId(), ticker);
+                try {
+                    marketDataService.fetchAndSaveFromYahoo(ticker, run.startDate(), run.endDate());
+                } catch (Exception e) {
+                    log.warn("Backtest {}: failed to auto-fetch data for {}: {}", run.runId(), ticker, e.getMessage());
+                }
+            }
+        }
+
         // Load bar series for each ticker
         List<BarSeries> seriesList = run.tickers().stream()
                 .map(ticker -> {
