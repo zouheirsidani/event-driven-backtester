@@ -12,6 +12,9 @@ import MarketData from "@/pages/MarketData";
 import RunBacktest from "@/pages/RunBacktest";
 import Results from "@/pages/Results";
 import StrategyTemplates from "@/pages/StrategyTemplates";
+import ParameterSweep from "@/pages/ParameterSweep";
+import Compare from "@/pages/Compare";
+import WalkForward from "@/pages/WalkForward";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +37,9 @@ export default function App() {
             <Route path="/backtest" element={<RunBacktest />} />
             <Route path="/results" element={<Results />} />
             <Route path="/strategy-templates" element={<StrategyTemplates />} />
+            <Route path="/parameter-sweep" element={<ParameterSweep />} />
+            <Route path="/compare" element={<Compare />} />
+            <Route path="/walk-forward" element={<WalkForward />} />
           </Route>
         </Routes>
       </BrowserRouter>

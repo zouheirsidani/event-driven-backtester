@@ -195,6 +195,98 @@ export interface RunBacktestRequest {
   benchmarkTicker?: string;
 }
 
+// ── Parameter Sweep ───────────────────────────────────────────────────────────
+
+/** Request body for POST /backtests/sweep. */
+export interface SweepBacktestRequest {
+  strategyId: string;
+  tickers: string[];
+  startDate: string;
+  endDate: string;
+  initialCash: number;
+  slippageType?: string;
+  slippageAmount?: number;
+  commissionType?: string;
+  commissionAmount?: number;
+  benchmarkTicker?: string;
+  /** Map of parameter name to list of values to try, e.g. { lookbackDays: [10, 20, 30] }. */
+  parameters: Record<string, number[]>;
+}
+
+/** A single parameter combination result within a sweep run. */
+export interface SweepResultEntry {
+  parameterValues: Record<string, unknown>;
+  backtestRunId: string;
+  totalReturn: number | null;
+  sharpeRatio: number | null;
+  maxDrawdown: number | null;
+}
+
+/** Response for POST /backtests/sweep — ranked summary of all combinations. */
+export interface SweepResultResponse {
+  strategyId: string;
+  totalCombinations: number;
+  successfulRuns: number;
+  results: SweepResultEntry[];
+}
+
+// ── Walk-Forward Optimisation ─────────────────────────────────────────────────
+
+/** Request body for POST /backtests/walk-forward. */
+export interface WalkForwardRequest {
+  strategyId: string;
+  tickers: string[];
+  startDate: string;
+  endDate: string;
+  initialCash: number;
+  /** Length of each training window in calendar months. */
+  trainMonths: number;
+  /** Length of each test window in calendar months. */
+  testMonths: number;
+  slippageType?: string;
+  slippageAmount?: number;
+  commissionType?: string;
+  commissionAmount?: number;
+  benchmarkTicker?: string;
+  parameters: Record<string, number[]>;
+}
+
+/** Result for a single train/test window. */
+export interface WalkForwardWindowResult {
+  trainStart: string;
+  trainEnd: string;
+  testStart: string;
+  testEnd: string;
+  bestParams: Record<string, unknown> | null;
+  trainSharpe: number | null;
+  testReturn: number | null;
+  testSharpe: number | null;
+  testMaxDrawdown: number | null;
+  testRunId: string | null;
+}
+
+/** Response for POST /backtests/walk-forward. */
+export interface WalkForwardResponse {
+  strategyId: string;
+  totalWindows: number;
+  successfulWindows: number;
+  avgOutOfSampleSharpe: number | null;
+  avgOutOfSampleReturn: number | null;
+  windows: WalkForwardWindowResult[];
+}
+
+// ── Comparison ────────────────────────────────────────────────────────────────
+
+/** Request body for POST /backtests/compare. */
+export interface CompareBacktestsRequest {
+  runIds: string[];
+}
+
+/** Response for POST /backtests/compare — results for each requested run. */
+export interface CompareBacktestsResponse {
+  results: BacktestResultResponse[];
+}
+
 // ── User Strategy Templates ───────────────────────────────────────────────────
 
 /** A saved user strategy template. */

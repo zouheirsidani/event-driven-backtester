@@ -3,11 +3,14 @@ package com.backtester.api.controller;
 import com.backtester.api.dto.request.CompareBacktestsRequest;
 import com.backtester.api.dto.request.RunBacktestRequest;
 import com.backtester.api.dto.request.SweepBacktestRequest;
+import com.backtester.api.dto.request.WalkForwardRequest;
 import com.backtester.api.dto.response.BacktestResultResponse;
 import com.backtester.api.dto.response.BacktestRunDto;
 import com.backtester.api.dto.response.BacktestRunsResponse;
 import com.backtester.api.dto.response.CompareBacktestsResponse;
 import com.backtester.api.dto.response.SweepResultResponse;
+import com.backtester.api.dto.response.WalkForwardResponse;
+import com.backtester.application.backtest.WalkForwardService;
 import com.backtester.api.exception.ResourceNotFoundException;
 import com.backtester.api.mapper.BacktestDtoMapper;
 import com.backtester.application.backtest.BacktestService;
@@ -47,18 +50,22 @@ public class BacktestController {
     private final BacktestService backtestService;
     private final BacktestDtoMapper mapper;
     private final SweepService sweepService;
+    private final WalkForwardService walkForwardService;
 
     /**
-     * @param backtestService Application service for backtest lifecycle.
-     * @param mapper          Mapper that converts domain objects to response DTOs.
-     * @param sweepService    Service for running parameter sweeps.
+     * @param backtestService     Application service for backtest lifecycle.
+     * @param mapper              Mapper that converts domain objects to response DTOs.
+     * @param sweepService        Service for running parameter sweeps.
+     * @param walkForwardService  Service for walk-forward optimisation runs.
      */
     public BacktestController(BacktestService backtestService,
                                BacktestDtoMapper mapper,
-                               SweepService sweepService) {
+                               SweepService sweepService,
+                               WalkForwardService walkForwardService) {
         this.backtestService = backtestService;
         this.mapper = mapper;
         this.sweepService = sweepService;
+        this.walkForwardService = walkForwardService;
     }
 
     /**
@@ -174,6 +181,26 @@ public class BacktestController {
     @PostMapping("/sweep")
     public ResponseEntity<SweepResultResponse> runSweep(@Valid @RequestBody SweepBacktestRequest request) {
         SweepResultResponse response = sweepService.runSweep(request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Runs a walk-forward optimisation over the full date range.
+     *
+     * <p>Divides the range into rolling train/test windows.  For each window the
+     * best parameters from the training sweep are applied to the out-of-sample test
+     * period.  Returns per-window results and aggregate out-of-sample statistics.
+     *
+     * <p>Note: this is a long-running synchronous call.  Runtime scales with
+     * {@code (number of windows) × (number of parameter combinations) × (backtest duration)}.
+     *
+     * @param request Validated walk-forward configuration.
+     * @return 200 OK with per-window and aggregate results.
+     */
+    @PostMapping("/walk-forward")
+    public ResponseEntity<WalkForwardResponse> runWalkForward(
+            @Valid @RequestBody WalkForwardRequest request) {
+        WalkForwardResponse response = walkForwardService.run(request);
         return ResponseEntity.ok(response);
     }
 }

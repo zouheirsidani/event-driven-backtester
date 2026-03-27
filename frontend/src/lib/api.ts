@@ -16,6 +16,12 @@ import type {
   CreateSymbolRequest,
   IngestBarsRequest,
   RunBacktestRequest,
+  SweepBacktestRequest,
+  SweepResultResponse,
+  WalkForwardRequest,
+  WalkForwardResponse,
+  CompareBacktestsRequest,
+  CompareBacktestsResponse,
   UserStrategiesResponse,
   UserStrategyDto,
   CreateUserStrategyRequest,
@@ -91,6 +97,30 @@ export const getBacktestResult = (runId: string) =>
   client
     .get<BacktestResultResponse>(`/backtests/${runId}/results`)
     .then((r) => r.data);
+
+/**
+ * Runs a parameter sweep — all cartesian-product combinations of the supplied
+ * parameter value lists.  Note: this call is synchronous on the server and can
+ * take several seconds for large sweeps.
+ * @param req Sweep configuration including strategy, tickers, dates, and parameter ranges.
+ */
+export const runSweep = (req: SweepBacktestRequest) =>
+  client.post<SweepResultResponse>("/backtests/sweep", req).then((r) => r.data);
+
+/**
+ * Fetches and compares results for multiple completed backtest runs side by side.
+ * @param req List of run UUIDs to compare.
+ */
+export const compareBacktests = (req: CompareBacktestsRequest) =>
+  client.post<CompareBacktestsResponse>("/backtests/compare", req).then((r) => r.data);
+
+/**
+ * Runs a walk-forward optimisation over the full date range.
+ * Synchronous and long-running — use a loading state in the UI.
+ * @param req Walk-forward configuration.
+ */
+export const runWalkForward = (req: WalkForwardRequest) =>
+  client.post<WalkForwardResponse>("/backtests/walk-forward", req).then((r) => r.data);
 
 // ── User Strategy Templates ───────────────────────────────────────────────────
 

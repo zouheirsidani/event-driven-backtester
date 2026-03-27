@@ -18,8 +18,11 @@ import java.util.UUID;
  * Converts a {@link SignalEvent} into a concrete {@link OrderEvent} by determining
  * how many shares to trade based on the current portfolio state.
  *
- * <p>Uses an equal-weight position sizing rule: each LONG signal is allocated
- * {@code 1 / tickerCount} of total portfolio equity, capped by available cash.
+ * <p>Uses a correlation-aware position sizing rule: each LONG signal receives a
+ * pre-computed {@code allocationFraction} (calculated by {@link EventLoop} using
+ * pairwise Pearson correlations between all co-signaled tickers). Uncorrelated
+ * assets receive their full equal-weight fraction; highly correlated assets are
+ * scaled down to avoid concentrating correlated risk.
  * EXIT signals sell the full open position for the ticker.
  */
 @Component
@@ -28,24 +31,25 @@ public class PositionSizer {
     /**
      * Sizes an order based on the signal direction and current portfolio state.
      *
-     * @param signal        The strategy signal to act on.
-     * @param portfolio     Current portfolio for equity and cash lookups.
-     * @param currentPrices Today's closing prices keyed by ticker.
-     * @param tickerCount   Total number of tickers in this backtest run; used to
-     *                      compute the equal-weight allocation fraction (1 / tickerCount).
+     * @param signal             The strategy signal to act on.
+     * @param portfolio          Current portfolio for equity and cash lookups.
+     * @param currentPrices      Today's closing prices keyed by ticker.
+     * @param allocationFraction Fraction of total portfolio equity to allocate to this
+     *                           signal (correlation-adjusted by EventLoop; equals 1/tickerCount
+     *                           when no correlation data is available).
      * @return An order event if a trade should be placed; empty if skipped (e.g. zero
      *         price, no position to exit, or SHORT signal which is not yet supported).
      */
     public Optional<OrderEvent> size(SignalEvent signal, Portfolio portfolio,
                                       Map<String, BigDecimal> currentPrices,
-                                      int tickerCount) {
+                                      BigDecimal allocationFraction) {
         BigDecimal price = currentPrices.get(signal.ticker());
         if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
             return Optional.empty();
         }
 
         return switch (signal.direction()) {
-            case LONG -> sizeLong(signal, portfolio, price, tickerCount);
+            case LONG -> sizeLong(signal, portfolio, price, allocationFraction);
             case EXIT -> sizeExit(signal, portfolio);
             case SHORT -> Optional.empty(); // Not implemented in V1
         };
@@ -53,23 +57,19 @@ public class PositionSizer {
 
     /**
      * Calculates the share quantity for a LONG (buy) order.
-     * Allocates an equal-weight fraction ({@code 1 / tickerCount}) of total equity,
-     * then floors to whole shares and caps at the number of shares affordable
-     * with available cash.
+     * Allocates the given fraction of total portfolio equity, floors to whole shares,
+     * and caps at the number of shares affordable with available cash.
      *
-     * @param signal      The originating signal.
-     * @param portfolio   Portfolio used to look up equity and cash.
-     * @param price       Current price per share for the ticker.
-     * @param tickerCount Number of tickers in this run (drives the equal-weight fraction).
+     * @param signal             The originating signal.
+     * @param portfolio          Portfolio used to look up equity and cash.
+     * @param price              Current price per share for the ticker.
+     * @param allocationFraction Pre-computed equity fraction (correlation-adjusted).
      * @return A BUY order, or empty if the calculated quantity is zero (e.g. insufficient cash).
      */
     private Optional<OrderEvent> sizeLong(SignalEvent signal, Portfolio portfolio, BigDecimal price,
-                                           int tickerCount) {
+                                           BigDecimal allocationFraction) {
         BigDecimal equity = portfolio.totalEquity();
-        // Equal-weight: allocate 1/tickerCount of portfolio equity per signal
-        BigDecimal portfolioFraction = BigDecimal.ONE.divide(
-                BigDecimal.valueOf(Math.max(1, tickerCount)), 10, RoundingMode.HALF_UP);
-        BigDecimal allocation = equity.multiply(portfolioFraction);
+        BigDecimal allocation = equity.multiply(allocationFraction);
 
         int quantity = allocation.divide(price, 0, RoundingMode.FLOOR).intValue();
         if (quantity <= 0) return Optional.empty();

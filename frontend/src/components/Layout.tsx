@@ -5,7 +5,7 @@
  */
 import { useState, useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart2, BookMarked, Database, FlaskConical, LayoutDashboard, Moon, Sun } from "lucide-react";
+import { BarChart2, BookMarked, Database, FlaskConical, GitCompare, LayoutDashboard, Moon, RefreshCw, SlidersHorizontal, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -13,6 +13,9 @@ const nav = [
   { to: "/market-data", label: "Market Data", icon: Database },
   { to: "/backtest", label: "Run Backtest", icon: FlaskConical },
   { to: "/results", label: "Results", icon: BarChart2 },
+  { to: "/compare", label: "Compare", icon: GitCompare },
+  { to: "/parameter-sweep", label: "Parameter Sweep", icon: SlidersHorizontal },
+  { to: "/walk-forward", label: "Walk-Forward", icon: RefreshCw },
   { to: "/strategy-templates", label: "Strategy Templates", icon: BookMarked },
 ];
 
