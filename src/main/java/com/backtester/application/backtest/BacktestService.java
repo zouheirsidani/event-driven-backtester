@@ -16,6 +16,8 @@ import com.backtester.domain.strategy.Strategy;
 import com.backtester.domain.strategy.UserStrategyDefinition;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -132,8 +134,19 @@ public class BacktestService {
         );
 
         BacktestRun saved = runRepository.save(run);
-        // Pass resolvedStrategy (null means executor will look up by strategyId from registry)
-        executor.execute(saved, resolvedStrategy);
+
+        // Delay execution until after this transaction commits.
+        // If execute() were called here (inside the @Transactional boundary), the async
+        // thread could start before the PENDING row is visible to other transactions,
+        // causing a duplicate-key INSERT when the executor tries to save the RUNNING status.
+        final Strategy strategyToExecute = resolvedStrategy;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                executor.execute(saved, strategyToExecute);
+            }
+        });
+
         return saved;
     }
 
