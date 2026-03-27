@@ -175,7 +175,10 @@ export interface IngestBarsRequest {
 
 /** Request body for POST /backtests. */
 export interface RunBacktestRequest {
-  strategyId: string;
+  /** Identifier of a registered base strategy; optional if userStrategyId is set. */
+  strategyId?: string;
+  /** UUID of a saved user strategy template; optional if strategyId is set. */
+  userStrategyId?: string;
   tickers: string[];
   /** ISO 8601 date string, e.g. "2021-01-01". */
   startDate: string;
@@ -188,4 +191,30 @@ export interface RunBacktestRequest {
   /** "FIXED" or "PER_SHARE"; defaults to FIXED with zero amount if omitted. */
   commissionType?: string;
   commissionAmount?: number;
+  /** Ticker for CAPM alpha/beta benchmark; optional. */
+  benchmarkTicker?: string;
+}
+
+// ── User Strategy Templates ───────────────────────────────────────────────────
+
+/** A saved user strategy template. */
+export interface UserStrategyDto {
+  id: string;
+  name: string;
+  baseStrategyId: string;
+  parameters: Record<string, unknown>;
+  createdAt: string;
+}
+
+/** Response envelope for GET /user-strategies. */
+export interface UserStrategiesResponse {
+  templates: UserStrategyDto[];
+  count: number;
+}
+
+/** Request body for POST /user-strategies. */
+export interface CreateUserStrategyRequest {
+  name: string;
+  baseStrategyId: string;
+  parameters?: Record<string, unknown>;
 }

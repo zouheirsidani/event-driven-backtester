@@ -4,7 +4,7 @@
  * Active route highlighting is handled by React Router's NavLink isActive prop.
  */
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart2, Database, FlaskConical, LayoutDashboard } from "lucide-react";
+import { BarChart2, BookMarked, Database, FlaskConical, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -12,6 +12,7 @@ const nav = [
   { to: "/market-data", label: "Market Data", icon: Database },
   { to: "/backtest", label: "Run Backtest", icon: FlaskConical },
   { to: "/results", label: "Results", icon: BarChart2 },
+  { to: "/strategy-templates", label: "Strategy Templates", icon: BookMarked },
 ];
 
 export default function Layout() {

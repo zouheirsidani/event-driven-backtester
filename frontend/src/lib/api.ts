@@ -16,6 +16,9 @@ import type {
   CreateSymbolRequest,
   IngestBarsRequest,
   RunBacktestRequest,
+  UserStrategiesResponse,
+  UserStrategyDto,
+  CreateUserStrategyRequest,
 } from "./types";
 
 /** Axios instance pre-configured with the backend's API base path. */
@@ -88,3 +91,23 @@ export const getBacktestResult = (runId: string) =>
   client
     .get<BacktestResultResponse>(`/backtests/${runId}/results`)
     .then((r) => r.data);
+
+// ── User Strategy Templates ───────────────────────────────────────────────────
+
+/** Fetches all saved user strategy templates. */
+export const getUserStrategies = () =>
+  client.get<UserStrategiesResponse>("/user-strategies").then((r) => r.data);
+
+/**
+ * Creates a new user strategy template.
+ * @param req Template name, base strategy ID, and optional parameter overrides.
+ */
+export const createUserStrategy = (req: CreateUserStrategyRequest) =>
+  client.post<UserStrategyDto>("/user-strategies", req).then((r) => r.data);
+
+/**
+ * Deletes a user strategy template by ID.
+ * @param id UUID string of the template to delete.
+ */
+export const deleteUserStrategy = (id: string) =>
+  client.delete(`/user-strategies/${id}`).then((r) => r.data);

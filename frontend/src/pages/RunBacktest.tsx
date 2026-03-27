@@ -1,14 +1,17 @@
 /**
  * Run Backtest page — form for configuring and submitting a new backtest run.
  *
- * The user selects a strategy, one or more registered tickers, a date range,
- * starting capital, and optionally slippage/commission parameters.
- * On submit the form posts to the backend and shows a confirmation card with
+ * The user selects a strategy mode ("Base Strategy" or "Saved Template"), one or more
+ * registered tickers, a date range, starting capital, and optionally slippage/commission
+ * parameters.  On submit the form posts to the backend and shows a confirmation card with
  * options to view results or submit another backtest.
+ *
+ * A "Save as Template" button lets users persist the current strategy selection with a
+ * custom name for reuse.
  */
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { getStrategies, getSymbols, submitBacktest } from "@/lib/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getStrategies, getSymbols, submitBacktest, getUserStrategies, createUserStrategy } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,10 +25,15 @@ import { formatDate } from "@/lib/utils";
 
 export default function RunBacktest() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: strategiesData } = useQuery({ queryKey: ["strategies"], queryFn: getStrategies });
   const { data: symbolsData } = useQuery({ queryKey: ["symbols"], queryFn: getSymbols });
+  const { data: userStrategiesData } = useQuery({ queryKey: ["userStrategies"], queryFn: getUserStrategies });
 
+  /** "base" = use a registered strategy directly; "template" = use a saved user template */
+  const [strategyMode, setStrategyMode] = useState<"base" | "template">("base");
   const [strategyId, setStrategyId] = useState("");
+  const [userStrategyId, setUserStrategyId] = useState("");
   const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
   const [startDate, setStartDate] = useState("2021-01-01");
   const [endDate, setEndDate] = useState("2023-12-31");
@@ -35,12 +43,25 @@ export default function RunBacktest() {
   const [commissionType, setCommissionType] = useState("FIXED");
   const [commissionAmount, setCommissionAmount] = useState("1.00");
 
+  /** State for the inline "Save as Template" form */
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+
   const [submitted, setSubmitted] = useState<BacktestRunDto | null>(null);
 
   const mutation = useMutation({
     mutationFn: submitBacktest,
     onSuccess: (run) => {
       setSubmitted(run);
+    },
+  });
+
+  const saveTemplateMutation = useMutation({
+    mutationFn: createUserStrategy,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["userStrategies"] });
+      setShowSaveTemplate(false);
+      setTemplateName("");
     },
   });
 
@@ -60,10 +81,11 @@ export default function RunBacktest() {
    * Reads the current form state and submits the backtest request via the mutation.
    * Numeric string inputs (initialCash, slippageAmount, commissionAmount) are coerced
    * to numbers before being sent in the request body.
+   * Sends either strategyId (base mode) or userStrategyId (template mode) — not both.
    */
   function handleSubmit() {
     mutation.mutate({
-      strategyId,
+      ...(strategyMode === "base" ? { strategyId } : { userStrategyId }),
       tickers: selectedTickers,
       startDate,
       endDate,
@@ -73,6 +95,21 @@ export default function RunBacktest() {
       commissionType,
       commissionAmount: Number(commissionAmount),
     });
+  }
+
+  /**
+   * Saves the currently selected base strategy as a named user template.
+   */
+  function handleSaveTemplate() {
+    if (!templateName.trim() || !strategyId) return;
+    saveTemplateMutation.mutate({ name: templateName.trim(), baseStrategyId: strategyId });
+  }
+
+  /** Whether the submit button should be disabled based on current form state. */
+  function isSubmitDisabled(): boolean {
+    if (selectedTickers.length === 0 || !startDate || !endDate || mutation.isPending) return true;
+    if (strategyMode === "base") return !strategyId;
+    return !userStrategyId;
   }
 
   return (
@@ -95,25 +132,112 @@ export default function RunBacktest() {
                 <CardTitle className="text-base">Strategy & Symbols</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Strategy mode toggle */}
                 <div className="space-y-1">
-                  <Label>Strategy</Label>
-                  {!strategiesData?.strategies.length ? (
-                    <p className="text-sm text-muted-foreground">No strategies available.</p>
-                  ) : (
-                    <Select value={strategyId} onValueChange={setStrategyId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a strategy…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {strategiesData.strategies.map((s) => (
-                          <SelectItem key={s.strategyId} value={s.strategyId}>
-                            {s.displayName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+                  <Label>Strategy Mode</Label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setStrategyMode("base")}
+                      className={`flex-1 px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                        strategyMode === "base"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border hover:bg-muted"
+                      }`}
+                    >
+                      Base Strategy
+                    </button>
+                    <button
+                      onClick={() => setStrategyMode("template")}
+                      className={`flex-1 px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                        strategyMode === "template"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border hover:bg-muted"
+                      }`}
+                    >
+                      Saved Template
+                    </button>
+                  </div>
                 </div>
+
+                {strategyMode === "base" ? (
+                  <div className="space-y-1">
+                    <Label>Strategy</Label>
+                    {!strategiesData?.strategies.length ? (
+                      <p className="text-sm text-muted-foreground">No strategies available.</p>
+                    ) : (
+                      <Select value={strategyId} onValueChange={setStrategyId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a strategy…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {strategiesData.strategies.map((s) => (
+                            <SelectItem key={s.strategyId} value={s.strategyId}>
+                              {s.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {/* Save as Template inline form */}
+                    {strategyId && (
+                      <div className="pt-1">
+                        {!showSaveTemplate ? (
+                          <button
+                            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                            onClick={() => setShowSaveTemplate(true)}
+                          >
+                            Save as Template
+                          </button>
+                        ) : (
+                          <div className="flex gap-2 items-center mt-1">
+                            <Input
+                              className="h-7 text-xs"
+                              placeholder="Template name…"
+                              value={templateName}
+                              onChange={(e) => setTemplateName(e.target.value)}
+                            />
+                            <Button
+                              size="sm"
+                              className="h-7 text-xs px-2"
+                              disabled={!templateName.trim() || saveTemplateMutation.isPending}
+                              onClick={handleSaveTemplate}
+                            >
+                              Save
+                            </Button>
+                            <button
+                              className="text-xs text-muted-foreground hover:text-foreground"
+                              onClick={() => { setShowSaveTemplate(false); setTemplateName(""); }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <Label>Saved Template</Label>
+                    {!userStrategiesData?.templates.length ? (
+                      <p className="text-sm text-muted-foreground">
+                        No templates saved yet. Use "Base Strategy" mode and click "Save as Template".
+                      </p>
+                    ) : (
+                      <Select value={userStrategyId} onValueChange={setUserStrategyId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a template…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userStrategiesData.templates.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name} ({t.baseStrategyId})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Tickers (select one or more)</Label>
@@ -231,13 +355,7 @@ export default function RunBacktest() {
               className="w-full"
               size="lg"
               onClick={handleSubmit}
-              disabled={
-                !strategyId ||
-                selectedTickers.length === 0 ||
-                !startDate ||
-                !endDate ||
-                mutation.isPending
-              }
+              disabled={isSubmitDisabled()}
             >
               {mutation.isPending ? "Submitting…" : "Submit Backtest"}
             </Button>

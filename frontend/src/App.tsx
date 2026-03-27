@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import MarketData from "@/pages/MarketData";
 import RunBacktest from "@/pages/RunBacktest";
 import Results from "@/pages/Results";
+import StrategyTemplates from "@/pages/StrategyTemplates";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/market-data" element={<MarketData />} />
             <Route path="/backtest" element={<RunBacktest />} />
             <Route path="/results" element={<Results />} />
+            <Route path="/strategy-templates" element={<StrategyTemplates />} />
           </Route>
         </Routes>
       </BrowserRouter>

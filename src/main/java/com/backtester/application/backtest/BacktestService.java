@@ -2,6 +2,7 @@ package com.backtester.application.backtest;
 
 import com.backtester.application.port.BacktestResultRepository;
 import com.backtester.application.port.BacktestRunRepository;
+import com.backtester.application.port.UserStrategyDefinitionRepository;
 import com.backtester.domain.backtest.BacktestResult;
 import com.backtester.domain.backtest.BacktestRun;
 import com.backtester.domain.backtest.BacktestStatus;
@@ -11,6 +12,8 @@ import com.backtester.domain.backtest.FixedSlippage;
 import com.backtester.domain.backtest.PerShareCommission;
 import com.backtester.domain.backtest.PercentSlippage;
 import com.backtester.domain.backtest.SlippageModel;
+import com.backtester.domain.strategy.Strategy;
+import com.backtester.domain.strategy.UserStrategyDefinition;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,18 +39,27 @@ public class BacktestService {
     private final BacktestRunRepository runRepository;
     private final BacktestResultRepository resultRepository;
     private final BacktestExecutor executor;
+    private final UserStrategyDefinitionRepository userStrategyDefinitionRepository;
+    private final List<Strategy> strategies;
 
     /**
-     * @param runRepository    Port for persisting and querying backtest run records.
-     * @param resultRepository Port for persisting and querying backtest results.
-     * @param executor         Async executor that runs the simulation on a background thread.
+     * @param runRepository                    Port for persisting and querying backtest run records.
+     * @param resultRepository                 Port for persisting and querying backtest results.
+     * @param executor                         Async executor that runs the simulation on a background thread.
+     * @param userStrategyDefinitionRepository Port for resolving user-saved strategy templates.
+     * @param strategies                       All registered strategy implementations, used to resolve
+     *                                         the base strategy when a user strategy template is provided.
      */
     public BacktestService(BacktestRunRepository runRepository,
                             BacktestResultRepository resultRepository,
-                            BacktestExecutor executor) {
+                            BacktestExecutor executor,
+                            UserStrategyDefinitionRepository userStrategyDefinitionRepository,
+                            List<Strategy> strategies) {
         this.runRepository = runRepository;
         this.resultRepository = resultRepository;
         this.executor = executor;
+        this.userStrategyDefinitionRepository = userStrategyDefinitionRepository;
+        this.strategies = strategies;
     }
 
     /**
@@ -55,7 +67,12 @@ public class BacktestService {
      * The run is initially saved with status PENDING; the executor will transition
      * it to RUNNING and then COMPLETED or FAILED.
      *
-     * @param strategyId       Strategy identifier (must match a registered strategy).
+     * <p>Exactly one of {@code strategyId} or {@code userStrategyId} must be non-null.
+     * When {@code userStrategyId} is provided, the template is resolved and its base
+     * strategy is configured with the stored parameters before execution.
+     *
+     * @param strategyId       Strategy identifier (must match a registered strategy); null if using a template.
+     * @param userStrategyId   UUID of a saved user strategy template; null if using strategyId directly.
      * @param tickers          Tickers to include in the simulation.
      * @param startDate        Start date (inclusive).
      * @param endDate          End date (inclusive).
@@ -69,6 +86,7 @@ public class BacktestService {
      */
     @Transactional
     public BacktestRun submit(String strategyId,
+                               UUID userStrategyId,
                                List<String> tickers,
                                LocalDate startDate,
                                LocalDate endDate,
@@ -81,9 +99,26 @@ public class BacktestService {
         SlippageModel slippageModel = buildSlippageModel(slippageType, slippageAmount);
         CommissionModel commissionModel = buildCommissionModel(commissionType, commissionAmount);
 
+        // Resolve strategy: either use the provided strategyId directly, or look up a user template
+        Strategy resolvedStrategy = null;
+        String effectiveStrategyId = strategyId;
+
+        if (userStrategyId != null) {
+            UserStrategyDefinition template = userStrategyDefinitionRepository.findById(userStrategyId)
+                    .orElseThrow(() -> new IllegalArgumentException("Strategy template not found: " + userStrategyId));
+            final String baseId = template.baseStrategyId();
+            effectiveStrategyId = baseId;
+            Strategy base = strategies.stream()
+                    .filter(s -> s.strategyId().equals(baseId))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Base strategy not found: " + baseId));
+            // Apply template parameters to get a configured strategy instance
+            resolvedStrategy = base.withParameters(template.parameters());
+        }
+
         BacktestRun run = new BacktestRun(
                 UUID.randomUUID(),
-                strategyId,
+                effectiveStrategyId,
                 tickers,
                 startDate,
                 endDate,
@@ -97,7 +132,8 @@ public class BacktestService {
         );
 
         BacktestRun saved = runRepository.save(run);
-        executor.execute(saved);
+        // Pass resolvedStrategy (null means executor will look up by strategyId from registry)
+        executor.execute(saved, resolvedStrategy);
         return saved;
     }
 
@@ -132,6 +168,7 @@ public class BacktestService {
                                            String commissionType,
                                            BigDecimal commissionAmount,
                                            String benchmarkTicker) {
+        // This method is for sweep use; strategyId is always supplied directly (no user template resolution needed)
         SlippageModel slippageModel = buildSlippageModel(slippageType, slippageAmount);
         CommissionModel commissionModel = buildCommissionModel(commissionType, commissionAmount);
 

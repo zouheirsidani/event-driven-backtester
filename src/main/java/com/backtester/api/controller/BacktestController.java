@@ -65,13 +65,26 @@ public class BacktestController {
      * Submits a new backtest run.  The run is persisted immediately and execution
      * starts asynchronously on a background thread.
      *
+     * <p>Exactly one of {@code strategyId} or {@code userStrategyId} must be provided.
+     * Providing neither or both returns 400 Bad Request.
+     *
      * @param request Validated backtest configuration.
      * @return 202 Accepted with the created run DTO.
+     * @throws IllegalArgumentException if neither or both strategy selectors are provided.
      */
     @PostMapping
     public ResponseEntity<BacktestRunDto> submitBacktest(@Valid @RequestBody RunBacktestRequest request) {
+        // Validate that exactly one of strategyId / userStrategyId is supplied
+        if ((request.strategyId() == null || request.strategyId().isBlank()) && request.userStrategyId() == null) {
+            throw new IllegalArgumentException("Either strategyId or userStrategyId must be provided");
+        }
+        if (request.strategyId() != null && !request.strategyId().isBlank() && request.userStrategyId() != null) {
+            throw new IllegalArgumentException("Provide either strategyId or userStrategyId, not both");
+        }
+
         BacktestRun run = backtestService.submit(
                 request.strategyId(),
+                request.userStrategyId(),
                 request.tickers(),
                 request.startDate(),
                 request.endDate(),

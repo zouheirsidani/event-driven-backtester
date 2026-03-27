@@ -80,15 +80,18 @@ public class BacktestExecutor {
      * have committed by the time this async thread starts, so a DB lookup by ID would
      * fail silently and leave the run stuck in PENDING.
      *
-     * @param run The persisted backtest run to execute.
+     * @param run              The persisted backtest run to execute.
+     * @param strategyOverride Pre-configured strategy instance (e.g. from a user template with
+     *                         parameters applied), or {@code null} to resolve by strategyId from
+     *                         the registered strategy list.
      * @return A completed future (used only to satisfy the {@code @Async} contract).
      */
     @Async("backtestThreadPool")
-    public CompletableFuture<Void> execute(BacktestRun run) {
+    public CompletableFuture<Void> execute(BacktestRun run, Strategy strategyOverride) {
         try {
             runRepository.save(run.withStatus(BacktestStatus.RUNNING));
             log.info("Backtest {} started (strategy={}, tickers={})", run.runId(), run.strategyId(), run.tickers());
-            BacktestResult result = executeRun(run, null);
+            BacktestResult result = executeRun(run, strategyOverride);
             log.info("Backtest {} completed. Total return: {}", run.runId(), result.metrics().totalReturn());
         } catch (Exception e) {
             log.error("Backtest {} failed: {}", run.runId(), e.getMessage(), e);
@@ -124,7 +127,7 @@ public class BacktestExecutor {
     }
 
     /**
-     * Core simulation logic shared between {@link #execute(UUID)} and {@link #executeSync}.
+     * Core simulation logic shared between {@link #execute(BacktestRun, Strategy)} and {@link #executeSync}.
      *
      * <p>Loads bar data, resolves or uses the provided strategy, runs the event loop,
      * computes metrics, and persists the result.  The run is transitioned to COMPLETED
