@@ -64,9 +64,6 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="px-6 py-4 border-t">
-          <p className="text-xs text-muted-foreground">Milestone 3 · Java 21</p>
-        </div>
       </aside>
 
       {/* Main content */}
