@@ -105,6 +105,40 @@ Users can save named strategy configurations via `POST /api/v1/user-strategies`.
 - ✗ Walk-forward optimisation (sweep exists but no train/test windows)
 - ✗ WebSocket streaming (frontend polls at 2s intervals)
 
+## Live trading bot — feasibility notes
+
+The architecture is already well-suited for a live trading extension. The port/adapter pattern means broker/data integrations only require new implementations in `infrastructure/` without touching domain or application logic.
+
+### What can be reused as-is
+- `Strategy` interface and all four strategy implementations
+- `Portfolio`, `Position`, `Fill` — broker-agnostic state machine
+- `SignalEvent` / `OrderEvent` / `FillEvent` hierarchy
+- `MetricsCalculator`
+
+### New port interfaces needed (`application/port/`)
+- `OrderExecutionClient` — submit/cancel/query orders at a broker
+- `AccountSyncClient` — fetch live positions and cash on startup
+- `RealTimeDataClient` — subscribe to streaming price ticks
+
+### Core engine change
+`EventLoop` iterates over historical dates (batch, synchronous). Live trading needs a `LiveTradingEngine` that is clock-driven and async: triggers `strategy.onDay()` on a schedule, routes `OrderEvent` to the broker adapter, and receives fill confirmations out-of-band. This runs alongside the existing backtester without replacing it.
+
+### Recommended broker for first integration
+**Alpaca** — free paper trading, REST + WebSocket, straightforward auth. Implement the three port interfaces above pointing at their API.
+
+### Recommended build sequence
+1. Define `OrderExecutionClient`, `AccountSyncClient`, `RealTimeDataClient` port interfaces
+2. Implement against Alpaca paper trading API (`infrastructure/broker/alpaca/`)
+3. Build `LiveTradingEngine` service (clock-driven, async fills)
+4. Add `POST /api/v1/trading/start` + `GET /api/v1/trading/status` endpoints
+5. Paper-trade for 2–4 weeks; add risk controls (max position size, daily loss stop, leverage limits) before going live
+
+### Risk controls (non-negotiable before live)
+- Max notional per ticker and per sector
+- Daily loss stop (auto-flatten and halt)
+- Leverage limit
+- Graceful shutdown handler (flatten or hold positions on SIGTERM)
+
 ## Git workflow
 
 After completing any meaningful unit of work, commit and push immediately so the repository on GitHub always reflects the current state. Never leave work uncommitted at the end of a session.
